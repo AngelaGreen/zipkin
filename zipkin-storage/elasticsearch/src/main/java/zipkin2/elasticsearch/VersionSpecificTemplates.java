@@ -121,7 +121,7 @@ final class VersionSpecificTemplates {
               + "        },\n"
               + "        \"duration\": { \"type\": \"long\" },\n"
               + "        \"annotations\": { \"enabled\": false },\n"
-              + "        \"tags\": { \"enabled\": false },\n"
+//              + "        \"tags\": { \"enabled\": false },\n" // 需要被索引
               + "        \"_q\": { KEYWORD }\n"
               + "      }\n"
               + "    }\n"
