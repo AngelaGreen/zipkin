@@ -121,7 +121,17 @@ final class VersionSpecificTemplates {
               + "        },\n"
               + "        \"duration\": { \"type\": \"long\" },\n"
               + "        \"annotations\": { \"enabled\": false },\n"
-//              + "        \"tags\": { \"enabled\": false },\n" // 需要被索引
+              + "        \"tags\": {" // 需要被索引
+              + "          \"properties\": {\n"
+              + "            \"error\":            { \"type\": \"text\" },\n"
+              + "            \"http.queryString\": { \"type\": \"text\" },\n"
+              + "            \"http.body\":        { \"type\": \"text\" },\n"
+              + "            \"http.response\":    { \"type\": \"text\" },\n"
+              + "            \"dubbo.arguments\":  { \"type\": \"text\" },\n"
+              + "            \"dubbo.response\":   { \"type\": \"text\" },\n"
+              + "            \"jms.body\":         { \"type\": \"text\" }\n"
+              + "          }"
+              + "        },\n"
               + "        \"_q\": { KEYWORD }\n"
               + "      }\n"
               + "    }\n"
