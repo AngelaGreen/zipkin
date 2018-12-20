@@ -129,6 +129,7 @@ Defaults to true
 * `QUERY_LOOKBACK`: How many milliseconds queries can look back from endTs; Defaults to 24 hours (two daily buckets: one for today and one for yesterday)
 * `STORAGE_TYPE`: SpanStore implementation: one of `mem`, `mysql`, `cassandra`, `elasticsearch`
 * `COLLECTOR_SAMPLE_RATE`: Percentage of traces to retain, defaults to always sample (1.0).
+* `AUTOCOMPLETE_KEYS`: list of span tag keys which will be returned by the `/api/v2/autocompleteTags` endpoint
 
 ### Cassandra Storage
 Zipkin's [Cassandra storage component](../zipkin-storage/cassandra)
@@ -212,6 +213,11 @@ The following apply when `STORAGE_TYPE` is set to `mysql`:
     * `MYSQL_TCP_PORT`: Defaults to 3306
     * `MYSQL_MAX_CONNECTIONS`: Maximum concurrent connections, defaults to 10
     * `MYSQL_USE_SSL`: Requires `javax.net.ssl.trustStore` and `javax.net.ssl.trustStorePassword`, defaults to false.
+
+Alternatively you can use `MYSQL_JDBC_URL` and specify the complete JDBC url yourself. Note that the URL constructed by
+using the separate settings above will also include the following parameters: 
+`?autoReconnect=true&useSSL=false&useUnicode=yes&characterEncoding=UTF-8`. If you specify the JDBC url yourself, add
+these parameters as well.
 
 Example usage:
 

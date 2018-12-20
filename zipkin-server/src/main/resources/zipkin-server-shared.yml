@@ -46,6 +46,7 @@ zipkin:
   storage:
     strict-trace-id: ${STRICT_TRACE_ID:true}
     search-enabled: ${SEARCH_ENABLED:true}
+    autocomplete-keys: ${AUTOCOMPLETE_KEYS:}
     type: ${STORAGE_TYPE:mem}
     mem:
       # Maximum number of spans to keep in memory.  When exceeded, oldest traces (and their spans) will be purged.
@@ -110,6 +111,7 @@ zipkin:
       http-logging: ${ES_HTTP_LOGGING:}
       legacy-reads-enabled: ${ES_LEGACY_READS_ENABLED:true}
     mysql:
+      jdbc-url: ${MYSQL_JDBC_URL:}
       host: ${MYSQL_HOST:localhost}
       port: ${MYSQL_TCP_PORT:3306}
       username: ${MYSQL_USER:}

@@ -1,183 +1,113 @@
 // eslint-disable no-nested-ternary
 import _ from 'lodash';
 import moment from 'moment';
+import {getErrorType} from './spanRow';
 
-import {Constants} from './traceConstants';
-
-function endpointsForSpan(span) {
-  return _.union(
-    (span.annotations || []).map(a => a.endpoint),
-    (span.binaryAnnotations || []).map(a => a.endpoint)
-  ).filter(h => h != null);
+// To ensure data doesn't scroll off the screen, we need all timestamps, not just
+// client/server ones.
+export function addTimestamps(span, timestamps) {
+  if (!span.timestamp) return;
+  timestamps.push(span.timestamp);
+  if (!span.duration) return;
+  timestamps.push(span.timestamp + span.duration);
 }
 
-// What's the total duration of the spans in this trace?
-export function traceDuration(spans) {
-  function makeList({timestamp, duration}) {
-    if (!timestamp) {
-      return [];
-    } else if (!duration) {
-      return [timestamp];
-    } else {
-      return [timestamp, timestamp + duration];
-    }
+export function getMaxDuration(timestamps) {
+  if (timestamps.length > 1) {
+    timestamps.sort();
+    return timestamps[timestamps.length - 1] - timestamps[0];
   }
+  return 0;
+}
 
-  // turns (timestamp, timestamp + duration) into an ordered list
-  const timestamps = _(spans).flatMap(makeList).sort().value();
-
-  if (timestamps.length < 2) {
-    return null;
+function pushEntry(dict, key, value) {
+  if (dict[key]) {
+    dict[key].push(value);
   } else {
-    const first = _.head(timestamps);
-    const last = _.last(timestamps);
-    return last - first;
+    dict[key] = [value]; // eslint-disable-line no-param-reassign
   }
 }
 
-export function getServiceNames(span) {
-  return _(endpointsForSpan(span))
-      .map((ep) => ep.serviceName)
-      .filter((name) => name != null && name !== '')
-      .uniq().value();
-}
+function addServiceNameTimestampDuration(span, groupedTimestamps) {
+  const value = {
+    timestamp: span.timestamp || 0, // only used by totalDuration
+    duration: span.duration || 0
+  };
 
-function findServiceNameForBinaryAnnotation(span, key) {
-  const binaryAnnotation = _(span.binaryAnnotations || []).find((ann) =>
-            ann.key === key
-            && ann.endpoint != null
-            && ann.endpoint.serviceName != null
-            && ann.endpoint.serviceName !== '');
-  return binaryAnnotation ? binaryAnnotation.endpoint.serviceName : null;
-}
-
-function findServiceNameForAnnotation(span, values) {
-  const annotation = _(span.annotations || []).find((ann) =>
-            values.indexOf(ann.value) !== -1
-            && ann.endpoint != null
-            && ann.endpoint.serviceName != null
-            && ann.endpoint.serviceName !== '');
-  return annotation ? annotation.endpoint.serviceName : null;
-}
-
-export function getServiceName(span) {
-  // Most authoritative is the label of the server's endpoint
-  const serverAddressServiceName = findServiceNameForBinaryAnnotation(span, Constants.SERVER_ADDR);
-  if (serverAddressServiceName) {
-    return serverAddressServiceName;
+  if (span.localEndpoint && span.localEndpoint.serviceName) {
+    pushEntry(groupedTimestamps, span.localEndpoint.serviceName, value);
   }
-
-  // Next, the label of any server annotation, logged by an instrumented server
-  const serverAnnotationServiceName = findServiceNameForAnnotation(span, Constants.CORE_SERVER);
-  if (serverAnnotationServiceName) {
-    return serverAnnotationServiceName;
-  }
-
-  // Next, the label of any messaging annotation, logged by an instrumented producer or consumer
-  const messageAnnotationServiceName = findServiceNameForAnnotation(span, Constants.CORE_MESSAGE);
-  if (messageAnnotationServiceName) {
-    return messageAnnotationServiceName;
-  }
-
-  // Next is the label of the client's endpoint
-  const clientAddressServiceName = findServiceNameForBinaryAnnotation(span, Constants.CLIENT_ADDR);
-  if (clientAddressServiceName) {
-    return clientAddressServiceName;
-  }
-
-  // Next is the label of any client annotation, logged by an instrumented client
-  const clientAnnotationServiceName = findServiceNameForAnnotation(span, Constants.CORE_CLIENT);
-  if (clientAnnotationServiceName) {
-    return clientAnnotationServiceName;
-  }
-
-  // Next is the label of the broker's endpoint
-  const brokerAddressServiceName = findServiceNameForBinaryAnnotation(span, Constants.MESSAGE_ADDR);
-  if (brokerAddressServiceName) {
-    return brokerAddressServiceName;
-  }
-
-  // Then is the label of the local component's endpoint
-  const localServiceName = findServiceNameForBinaryAnnotation(span, Constants.LOCAL_COMPONENT);
-  if (localServiceName) {
-    return localServiceName;
-  }
-
-  // Finally, anything so that the service name isn't blank!
-  const allServiceNames = getServiceNames(span);
-  return allServiceNames.length === 0 ? null : allServiceNames[0];
-}
-
-function getSpanTimestamps(spans) {
-  return _(spans).flatMap((span) => getServiceNames(span).map((serviceName) => ({
-    name: serviceName,
-    timestamp: span.timestamp,
-    duration: span.duration
-  }))).value();
-}
-
-
-// returns 'critical' if one of the spans has an ERROR binary annotation, else
-// returns 'transient' if one of the spans has an ERROR annotation, else
-// returns 'none'
-export function getTraceErrorType(spans) {
-  let traceType = 'none';
-  for (let i = 0; i < spans.length; i++) {
-    const span = spans[i];
-    if (_(span.binaryAnnotations || []).findIndex(ann => ann.key === Constants.ERROR) !== -1) {
-      return 'critical';
-    } else if (traceType === 'none' &&
-               _(span.annotations || []).findIndex(ann => ann.value === Constants.ERROR) !== -1) {
-      traceType = 'transient';
-    }
-  }
-  return traceType;
-}
-
-function endpointEquals(e1, e2) {
-  return (e1.ipv4 === e2.ipv4 || e1.ipv6 === e2.ipv6)
-    && e1.port === e2.port && e1.serviceName === e2.serviceName;
-}
-
-export function traceSummary(spans = []) {
-  if (spans.length === 0 || !spans[0].timestamp) {
-    return null;
-  } else {
-    const duration = traceDuration(spans) || 0;
-    const endpoints = _(spans).flatMap(endpointsForSpan).uniqWith(endpointEquals).value();
-    const traceId = spans[0].traceId;
-    const timestamp = spans[0].timestamp;
-    const spanTimestamps = getSpanTimestamps(spans);
-    const errorType = getTraceErrorType(spans);
-    const totalSpans = spans.length;
-    return {
-      traceId,
-      timestamp,
-      duration,
-      spanTimestamps,
-      endpoints,
-      errorType,
-      totalSpans
-    };
+  // TODO: only do this if it is a leaf span and a client or producer.
+  // If we are at the bottom of the tree, it can be helpful to count also against a remote
+  // uninstrumented service
+  if (span.remoteEndpoint && span.remoteEndpoint.serviceName) {
+    pushEntry(groupedTimestamps, span.remoteEndpoint.serviceName, value);
   }
 }
 
-export function totalServiceTime(stamps, acc = 0) {
-  // This is a recursive function that performs arithmetic on duration
-  // If duration is undefined, it will infinitely recurse. Filter out that case
-  const filtered = stamps.filter((s) => s.duration);
+// Returns null on empty or when missing a timestamp
+export function traceSummary(root) {
+  const timestamps = [];
+  const groupedTimestamps = {};
+
+  let traceId;
+  let spanCount = 0;
+  let errorType = 'none';
+
+  root.traverse(span => {
+    spanCount++;
+    traceId = span.traceId;
+    errorType = getErrorType(span, errorType);
+    addTimestamps(span, timestamps);
+    addServiceNameTimestampDuration(span, groupedTimestamps);
+  });
+
+  if (timestamps.length === 0) throw new Error(`Trace ${traceId} is missing a timestamp`);
+
+  return {
+    traceId,
+    timestamp: timestamps[0],
+    duration: getMaxDuration(timestamps),
+    groupedTimestamps,
+    errorType,
+    spanCount
+  };
+}
+
+// This returns a total duration by merging all overlapping intervals found in the the input.
+//
+// This is used to create servicePercentage for index.mustache when a service is selected
+export function totalDuration(timestampAndDurations) {
+  const filtered = _(timestampAndDurations)
+    .filter((s) => s.duration) // filter out anything we can't make an interval out of
+    .sortBy('timestamp').value(); // to merge intervals, we need the input sorted
+
   if (filtered.length === 0) {
-    return acc;
-  } else {
-    const ts = _(filtered).minBy((s) => s.timestamp);
-    const [current, next] = _(filtered)
-        .partition((t) =>
-          t.timestamp >= ts.timestamp
-          && t.timestamp + t.duration <= ts.timestamp + ts.duration)
-        .value();
-    const endTs = Math.max(...current.map((t) => t.timestamp + t.duration));
-    return totalServiceTime(next, acc + (endTs - ts.timestamp));
+    return 0;
   }
+  if (filtered.length === 1) {
+    return filtered[0].duration;
+  }
+
+  let result = filtered[0].duration;
+  let currentIntervalEnd = filtered[0].timestamp + filtered[0].duration;
+
+  for (let i = 1; i < filtered.length; i++) {
+    const next = filtered[i];
+    const nextIntervalEnd = next.timestamp + next.duration;
+
+    if (nextIntervalEnd <= currentIntervalEnd) { // we are still in the interval
+      continue;
+    } else if (next.timestamp <= currentIntervalEnd) { // we extending the interval
+      result += nextIntervalEnd - currentIntervalEnd;
+      currentIntervalEnd = nextIntervalEnd;
+    } else { // this is a new interval
+      result += next.duration;
+      currentIntervalEnd = nextIntervalEnd;
+    }
+  }
+
+  return result;
 }
 
 function formatDate(timestamp, utc) {
@@ -188,86 +118,79 @@ function formatDate(timestamp, utc) {
   return m.format('MM-DD-YYYYTHH:mm:ss.SSSZZ');
 }
 
-export function getGroupedTimestamps(summary) {
-  return _(summary.spanTimestamps).groupBy((sts) => sts.name).value();
-}
-
-export function getServiceDurations(groupedTimestamps) {
-  return _(groupedTimestamps).toPairs().map(([name, sts]) => ({
-    name,
-    count: sts.length,
-    max: parseInt(Math.max(...sts.map(t => t.duration)) / 1000, 10)
-  })).sortBy('name').value();
-}
-
 export function mkDurationStr(duration) {
   if (duration === 0 || typeof duration === 'undefined') {
     return '';
   } else if (duration < 1000) {
-    return `${duration}μ`;
+    return `${duration.toFixed(0)}μs`;
   } else if (duration < 1000000) {
+    if (duration % 1000 === 0) { // Sometimes spans are in milliseconds resolution
+      return `${(duration / 1000).toFixed(0)}ms`;
+    }
     return `${(duration / 1000).toFixed(3)}ms`;
   } else {
     return `${(duration / 1000000).toFixed(3)}s`;
   }
 }
 
-function removeEmptyFromArray(array) {
-  const newArray = [];
-  for (let i = 0; i < array.length; i++) {
-    if (array[i]) {
-      newArray.push(array[i]);
-    }
-  }
-  return newArray;
+// maxSpanDurationStr is only used in index.mustache
+export function getServiceSummaries(groupedTimestamps) {
+  return _(groupedTimestamps).toPairs()
+    .map(([serviceName, sts]) => ({
+      serviceName,
+      spanCount: sts.length,
+      maxSpanDuration: Math.max(...sts.map(t => t.duration))
+    }))
+    .orderBy(['maxSpanDuration', 'serviceName'], ['desc', 'asc'])
+    .map(summary => ({
+      serviceName: summary.serviceName,
+      spanCount: summary.spanCount,
+      maxSpanDurationStr: mkDurationStr(summary.maxSpanDuration)
+    })).value();
 }
 
-export function traceSummariesToMustache(serviceName = null, traceSummaries, utc = false) {
-  if (traceSummaries.length === 0) {
-    return [];
-  } else {
-    const traceSummariesCleaned = removeEmptyFromArray(traceSummaries);
-    const maxDuration = Math.max(...traceSummariesCleaned.map((s) => s.duration)) / 1000;
+export function traceSummariesToMustache(serviceName, traceSummaries, utc = false) {
+  const maxDuration = Math.max(...traceSummaries.map((s) => s.duration));
 
-    return traceSummariesCleaned.map((t) => {
-      const duration = t.duration / 1000;
-      const groupedTimestamps = getGroupedTimestamps(t);
-      const serviceDurations = getServiceDurations(groupedTimestamps);
+  return traceSummaries.map((t) => {
+    const timestamp = t.timestamp;
 
-      let serviceTime;
-      if (!serviceName || !groupedTimestamps[serviceName]) {
-        serviceTime = 0;
-      } else {
-        serviceTime = totalServiceTime(groupedTimestamps[serviceName]);
+    const res = {
+      traceId: t.traceId, // used to navigate to trace screen
+      timestamp, // used only for client-side sort
+      startTs: formatDate(timestamp, utc),
+      spanCount: t.spanCount
+    };
+
+    const duration = t.duration || 0;
+    if (duration) {
+      // used to show the relative duration this trace was compared to others
+      res.width = parseInt(parseFloat(duration) / parseFloat(maxDuration) * 100, 10);
+      res.duration = duration / 1000; // used only for client-side sort
+      res.durationStr = mkDurationStr(duration);
+    }
+
+    // groupedTimestamps is keyed by service name, if there are no service names in the trace,
+    // don't try to add data dependent on service names.
+    if (Object.keys(t.groupedTimestamps).length !== 0) {
+      res.serviceSummaries = getServiceSummaries(t.groupedTimestamps);
+
+      // Only add a service percentage when there is a duration for it
+      if (serviceName && duration && t.groupedTimestamps[serviceName]) {
+        const serviceTime = totalDuration(t.groupedTimestamps[serviceName]);
+        // used for display and also client-side sort by service percentage
+        res.servicePercentage = parseInt(parseFloat(serviceTime) / parseFloat(duration) * 100, 10);
       }
+    }
 
-      const startTs = formatDate(t.timestamp, utc);
-      const durationStr = mkDurationStr(t.duration);
-      const servicePercentage = parseInt(
-          parseFloat(serviceTime) / parseFloat(t.duration) * 100,
-        10);
-      const width = parseInt(parseFloat(duration) / parseFloat(maxDuration) * 100, 10);
-      const infoClass = t.errorType === 'none' ? '' : `trace-error-${t.errorType}`;
-
-      return {
-        traceId: t.traceId,
-        startTs,
-        timestamp: t.timestamp,
-        duration,
-        durationStr,
-        servicePercentage,
-        totalSpans: t.totalSpans,
-        serviceDurations,
-        width,
-        infoClass
-      };
-    }).sort((t1, t2) => {
-      const durationComparison = t2.duration - t1.duration;
-      if (durationComparison === 0) {
-        return t1.traceId.localeCompare(t2.traceId);
-      } else {
-        return durationComparison;
-      }
-    });
-  }
+    if (t.errorType !== 'none') res.infoClass = `trace-error-${t.errorType}`;
+    return res;
+  }).sort((t1, t2) => {
+    const durationComparison = t2.duration - t1.duration;
+    if (durationComparison === 0) {
+      return t1.traceId.localeCompare(t2.traceId);
+    } else {
+      return durationComparison;
+    }
+  });
 }

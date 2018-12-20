@@ -18,7 +18,15 @@ module.exports = function(config) {
       captureConsole: true
     },
 
-    browsers: ['PhantomJS'],
+    browsers: ['ChromeHeadless', 'FirefoxHeadless'],
+
+    // see https://github.com/karma-runner/karma-firefox-launcher/issues/76
+    customLaunchers: {
+      FirefoxHeadless: {
+        base: 'Firefox',
+        flags: [ '-headless' ],
+      },
+    },
 
     webpack: {
       devtool: 'inline-source-map',
@@ -52,12 +60,9 @@ module.exports = function(config) {
       require('karma-webpack'),
       require('karma-mocha'),
       require('karma-chai'),
-      require('karma-phantomjs-launcher'),
+      require('karma-chrome-launcher'),
+      require('karma-firefox-launcher'),
       require('karma-sourcemap-loader')
-    ],
-
-    phantomjsLauncher: {
-      exitOnResourceError: true
-    }
+    ]
   });
 };

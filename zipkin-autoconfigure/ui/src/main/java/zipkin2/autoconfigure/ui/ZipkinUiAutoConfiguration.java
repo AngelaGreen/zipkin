@@ -27,8 +27,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
 import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
@@ -37,10 +35,9 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.filter.CharacterEncodingFilter;
 import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import static org.springframework.web.bind.annotation.RequestMethod.GET;
 import static org.springframework.web.servlet.HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE;
@@ -72,12 +69,12 @@ import static zipkin2.autoconfigure.ui.ZipkinUiProperties.DEFAULT_BASEPATH;
 @EnableConfigurationProperties(ZipkinUiProperties.class)
 @ConditionalOnProperty(name = "zipkin.ui.enabled", matchIfMissing = true)
 @RestController
-class ZipkinUiAutoConfiguration extends WebMvcConfigurerAdapter {
+class ZipkinUiAutoConfiguration {
 
   @Autowired
   ZipkinUiProperties ui;
 
-  @Value("classpath:zipkin-ui/index.html")
+  @Value("${zipkin.ui.source-root:classpath:zipkin-ui}/index.html")
   Resource indexHtml;
 
   @Bean
@@ -97,35 +94,15 @@ class ZipkinUiAutoConfiguration extends WebMvcConfigurerAdapter {
     return soup.html();
   }
 
-  @Override
-  public void addResourceHandlers(ResourceHandlerRegistry registry) {
-    registry.addResourceHandler("/zipkin/**")
-        .addResourceLocations("classpath:/zipkin-ui/")
-        .setCachePeriod((int) TimeUnit.DAYS.toSeconds(365));
-  }
-
-  /**
-   * This opts out of adding charset to png resources.
-   *
-   * <p>By default, {@linkplain CharacterEncodingFilter} adds a charset qualifier to all resources,
-   * which helps, as javascript assets include extended character sets. However, the filter also
-   * adds charset to well-known binary ones like png. This creates confusing content types, such as
-   * "image/png;charset=UTF-8".
-   *
-   * See https://github.com/spring-projects/spring-boot/issues/5459
-   */
   @Bean
-  @Order(Ordered.HIGHEST_PRECEDENCE)
-  public CharacterEncodingFilter characterEncodingFilter() {
-    CharacterEncodingFilter filter = new CharacterEncodingFilter() {
+  public WebMvcConfigurer resourceConfigurer(@Value("${zipkin.ui.source-root:classpath:zipkin-ui}") String sourceRoot) {
+    return new WebMvcConfigurer() {
       @Override
-      protected boolean shouldNotFilter(HttpServletRequest request) {
-        return request.getServletPath().endsWith(".png");
-      }
+      public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        registry.addResourceHandler("/zipkin/**")
+          .addResourceLocations(sourceRoot + "/")
+          .setCachePeriod((int) TimeUnit.DAYS.toSeconds(365));      }
     };
-    filter.setEncoding("UTF-8");
-    filter.setForceEncoding(true);
-    return filter;
   }
 
   @RequestMapping(value = "/zipkin/config.json", method = GET)

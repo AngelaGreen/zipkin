@@ -19,11 +19,11 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
+import org.springframework.boot.test.util.TestPropertyValues;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import zipkin2.autoconfigure.storage.mysql.Access;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.boot.test.util.EnvironmentTestUtils.addEnvironment;
 
 public class ZipkinMySQLStorageAutoConfigurationTest {
 
@@ -41,7 +41,7 @@ public class ZipkinMySQLStorageAutoConfigurationTest {
   @Test
   public void doesntProvidesStorageComponent_whenStorageTypeNotMySQL() {
     context = new AnnotationConfigApplicationContext();
-    addEnvironment(context, "zipkin.storage.type:cassandra");
+    TestPropertyValues.of("zipkin.storage.type:cassandra").applyTo(context);
     Access.registerMySQL(context);
     context.refresh();
 
@@ -52,7 +52,7 @@ public class ZipkinMySQLStorageAutoConfigurationTest {
   @Test
   public void providesStorageComponent_whenStorageTypeMySQL() {
     context = new AnnotationConfigApplicationContext();
-    addEnvironment(context, "zipkin.storage.type:mysql");
+    TestPropertyValues.of("zipkin.storage.type:mysql").applyTo(context);
     Access.registerMySQL(context);
     context.refresh();
 
@@ -62,7 +62,10 @@ public class ZipkinMySQLStorageAutoConfigurationTest {
   @Test
   public void canOverridesProperty_username() {
     context = new AnnotationConfigApplicationContext();
-    addEnvironment(context, "zipkin.storage.type:mysql", "zipkin.storage.mysql.username:robot");
+    TestPropertyValues.of(
+        "zipkin.storage.type:mysql",
+        "zipkin.storage.mysql.username:robot")
+    .applyTo(context);
     Access.registerMySQL(context);
     context.refresh();
 
@@ -72,7 +75,7 @@ public class ZipkinMySQLStorageAutoConfigurationTest {
   @Test
   public void strictTraceId_defaultsToTrue() {
     context = new AnnotationConfigApplicationContext();
-    addEnvironment(context, "zipkin.storage.type:mysql");
+    TestPropertyValues.of("zipkin.storage.type:mysql").applyTo(context);
     Access.registerMySQL(context);
     context.refresh();
     assertThat(context.getBean(MySQLStorage.class).strictTraceId).isTrue();
@@ -81,11 +84,72 @@ public class ZipkinMySQLStorageAutoConfigurationTest {
   @Test
   public void strictTraceId_canSetToFalse() {
     context = new AnnotationConfigApplicationContext();
-    addEnvironment(context, "zipkin.storage.type:mysql");
-    addEnvironment(context, "zipkin.storage.strict-trace-id:false");
+    TestPropertyValues.of(
+        "zipkin.storage.type:mysql",
+        "zipkin.storage.strict-trace-id:false")
+      .applyTo(context);
     Access.registerMySQL(context);
     context.refresh();
 
     assertThat(context.getBean(MySQLStorage.class).strictTraceId).isFalse();
+  }
+
+  @Test
+  public void searchEnabled_canSetToFalse() {
+    context = new AnnotationConfigApplicationContext();
+    TestPropertyValues.of(
+      "zipkin.storage.type:mysql",
+      "zipkin.storage.search-enabled:false")
+      .applyTo(context);
+    Access.registerMySQL(context);
+    context.refresh();
+
+    assertThat(context.getBean(MySQLStorage.class).searchEnabled).isFalse();
+  }
+
+  @Test
+  public void autocompleteKeys_list() {
+    context = new AnnotationConfigApplicationContext();
+    TestPropertyValues.of(
+      "zipkin.storage.type:mysql",
+      "zipkin.storage.autocomplete-keys:environment")
+      .applyTo(context);
+    Access.registerMySQL(context);
+    context.refresh();
+
+    assertThat(context.getBean(MySQLStorage.class).autocompleteKeys)
+      .containsOnly("environment");
+  }
+
+  @Test
+  public void usesJdbcUrl_whenPresent() {
+    context = new AnnotationConfigApplicationContext();
+    TestPropertyValues.of(
+        "zipkin.storage.type:mysql",
+        "zipkin.storage.mysql"
+      + ".jdbc-url:jdbc:mysql://host1,host2,host3/zipkin")
+    .applyTo(context);
+    Access.registerMySQL(context);
+    context.refresh();
+
+    assertThat(context.getBean(HikariDataSource.class).getJdbcUrl()).isEqualTo("jdbc:mysql://host1,host2,host3/zipkin");
+  }
+
+  @Test
+  public void usesRegularConfig_whenBlank() {
+    context = new AnnotationConfigApplicationContext();
+    TestPropertyValues.of(
+        "zipkin.storage.type:mysql",
+        "zipkin.storage.mysql.jdbc-url:",
+        "zipkin.storage.mysql.host:host",
+        "zipkin.storage.mysql.port:3306",
+        "zipkin.storage.mysql.username:root",
+        "zipkin.storage.mysql.password:secret",
+        "zipkin.storage.mysql.db:zipkin")
+    .applyTo(context);
+    Access.registerMySQL(context);
+    context.refresh();
+
+    assertThat(context.getBean(HikariDataSource.class).getJdbcUrl()).isEqualTo("jdbc:mysql://host:3306/zipkin?autoReconnect=true&useSSL=false&useUnicode=yes&characterEncoding=UTF-8");
   }
 }

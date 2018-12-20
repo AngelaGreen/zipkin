@@ -1,247 +1,204 @@
-import {Constants} from '../../js/component_ui/traceConstants';
-import traceToMustache,
-  {
-    getRootSpans,
-    formatEndpoint
-  } from '../../js/component_ui/traceToMustache';
-import {endpoint, annotation, span} from './traceTestHelpers';
+import {traceToMustache} from '../../js/component_ui/traceToMustache';
+const {SpanNode} = require('../../js/component_data/spanNode');
+const {clean} = require('../../js/component_data/spanCleaner');
+import {treeCorrectedForClockSkew} from '../../js/component_data/skew';
+import {httpTrace, netflixTrace, frontend, backend} from '../component_ui/traceTestHelpers';
 
-const ep1 = endpoint(123, 123, 'service1');
-const ep2 = endpoint(456, 456, 'service2');
-const ep3 = endpoint(666, 666, 'service2');
-const ep4 = endpoint(777, 777, 'service3');
-const ep5 = endpoint(888, 888, 'service3');
-
-const annotations1 = [
-  annotation(100, Constants.CLIENT_SEND, ep1),
-  annotation(150, Constants.CLIENT_RECEIVE, ep1)
-];
-const annotations2 = [
-  annotation(200, Constants.CLIENT_SEND, ep2),
-  annotation(250, Constants.CLIENT_RECEIVE, ep2)
-];
-const annotations3 = [
-  annotation(300, Constants.CLIENT_SEND, ep2),
-  annotation(350, Constants.CLIENT_RECEIVE, ep3)
-];
-const annotations4 = [
-  annotation(400, Constants.CLIENT_SEND, ep4),
-  annotation(500, Constants.CLIENT_RECEIVE, ep5)
-];
-
-const span1Id = '666';
-const span2Id = '777';
-const span3Id = '888';
-const span4Id = '999';
-
-const span1 = span(12345, 'methodcall1', span1Id, null, 100, 50, annotations1);
-const span2 = span(12345, 'methodcall2', span2Id, span1Id, 200, 50, annotations2);
-const span3 = span(12345, 'methodcall2', span3Id, span2Id, 300, 50, annotations3);
-const span4 = span(12345, 'methodcall2', span4Id, span3Id, 400, 100, annotations4);
-
-const trace = [span1, span2, span3, span4];
+// renders data into a tree for traceMustache
+const cleanedHttpTrace = treeCorrectedForClockSkew(httpTrace);
+const cleanedNetflixTrace = treeCorrectedForClockSkew(netflixTrace);
 
 describe('traceToMustache', () => {
-  it('should format duration', () => {
-    const modelview = traceToMustache(trace);
-    modelview.duration.should.equal('400μ');
-  });
-
-  it('should show the number of services', () => {
-    const modelview = traceToMustache(trace);
-    modelview.services.should.equal(3);
-  });
-
   it('should show logsUrl', () => {
-    const logsUrl = 'http/url.com';
-    const modelview = traceToMustache(trace, logsUrl);
-    modelview.logsUrl.should.equal(logsUrl);
+    const {logsUrl} = traceToMustache(cleanedHttpTrace, 'http/url.com');
+    expect(logsUrl).to.equal('http/url.com');
   });
 
-  it('should show service counts', () => {
-    const modelview = traceToMustache(trace);
-    modelview.serviceCounts.should.eql([{
-      name: 'service1',
-      count: 1,
-      max: 0
-    }, {
-      name: 'service2',
-      count: 2,
-      max: 0
-    }, {
-      name: 'service3',
-      count: 1,
-      max: 0
-    }]);
+  it('should derive summary info', () => {
+    const {traceId, durationStr, depth, serviceNameAndSpanCounts} =
+      traceToMustache(cleanedHttpTrace);
+
+    expect(traceId).to.equal('bb1f0e21882325b8');
+    durationStr.should.equal('168.731ms');
+    depth.should.equal(2); // number of span rows (distinct span IDs)
+    serviceNameAndSpanCounts.should.eql([
+      {serviceName: 'backend', spanCount: 1},
+      {serviceName: 'frontend', spanCount: 2}
+    ]);
+  });
+
+  it('should position incomplete spans at the correct offset', () => {
+    const {spans} = traceToMustache(cleanedNetflixTrace);
+
+    // the absolute values are not important, just checks that only the root span is at offset 0
+    spans.map(s => s.left).should.eql(
+      [0, 8.108108108108109, 16.216216216216218, 64.86486486486487]
+    );
+  });
+
+  it('should derive summary info even when headless', () => {
+    const headless = new SpanNode(); // headless as there's no root span
+
+    // make a copy of the cleaned http trace as adding a child is a mutation
+    treeCorrectedForClockSkew(httpTrace).children.forEach(child => headless.addChild(child));
+
+    const {traceId, durationStr, depth, serviceNameAndSpanCounts} =
+      traceToMustache(headless);
+
+    expect(traceId).to.equal('bb1f0e21882325b8');
+    durationStr.should.equal('111.121ms'); // client duration
+    depth.should.equal(1); // number of span rows (distinct span IDs)
+    serviceNameAndSpanCounts.should.eql([
+      {serviceName: 'backend', spanCount: 1},
+      {serviceName: 'frontend', spanCount: 1}
+    ]);
   });
 
   it('should show human-readable annotation name', () => {
-    const testTrace = [{
-      traceId: '2480ccca8df0fca5',
-      name: 'get',
-      id: '2480ccca8df0fca5',
-      timestamp: 1457186385375000,
-      duration: 333000,
-      annotations: [{
-        timestamp: 1457186385375000,
-        value: 'sr',
-        endpoint: {serviceName: 'zipkin-query', ipv4: '127.0.0.1', port: 9411}
-      }, {
-        timestamp: 1457186385708000,
-        value: 'ss',
-        endpoint: {serviceName: 'zipkin-query', ipv4: '127.0.0.1', port: 9411}
-      }],
-      binaryAnnotations: [{
-        key: 'sa',
-        value: true,
-        endpoint: {serviceName: 'zipkin-query', ipv4: '127.0.0.1', port: 9411}
-      }, {
-        key: 'literally-false',
-        value: 'false',
-        endpoint: {serviceName: 'zipkin-query', ipv4: '127.0.0.1', port: 9411}
-      }]
-    }];
-    const {spans: [testSpan]} = traceToMustache(testTrace);
-    testSpan.annotations[0].value.should.equal('Server Receive');
-    testSpan.annotations[1].value.should.equal('Server Send');
-    testSpan.binaryAnnotations[0].key.should.equal('Server Address');
-    testSpan.binaryAnnotations[1].value.should.equal('false');
+    const {spans: [testSpan]} = traceToMustache(cleanedHttpTrace);
+    testSpan.annotations[0].value.should.equal('Server Start');
+    testSpan.annotations[1].value.should.equal('Server Finish');
+    testSpan.tags[4].key.should.equal('Client Address');
   });
 
   it('should tolerate spans without annotations', () => {
-    const testTrace = [{
+    const testTrace = new SpanNode(clean({
       traceId: '2480ccca8df0fca5',
       name: 'get',
       id: '2480ccca8df0fca5',
       timestamp: 1457186385375000,
       duration: 333000,
-      binaryAnnotations: [{
-        key: 'lc',
-        value: 'component',
-        endpoint: {serviceName: 'zipkin-query', ipv4: '127.0.0.1', port: 9411}
-      }]
-    }];
+      localEndpoint: {serviceName: 'zipkin-query', ipv4: '127.0.0.1', port: 9411},
+      tags: {lc: 'component'}
+    }));
     const {spans: [testSpan]} = traceToMustache(testTrace);
-    testSpan.binaryAnnotations[0].key.should.equal('Local Component');
+    testSpan.tags[0].key.should.equal('Local Component');
   });
 
   it('should not include empty Local Component annotations', () => {
-    const testTrace = [{
+    const testTrace = new SpanNode(clean({
       traceId: '2480ccca8df0fca5',
       name: 'get',
       id: '2480ccca8df0fca5',
       timestamp: 1457186385375000,
       duration: 333000,
-      binaryAnnotations: [{
-        key: 'lc',
-        value: '',
-        endpoint: {serviceName: 'zipkin-query', ipv4: '127.0.0.1', port: 9411}
-      }]
-    }];
+      localEndpoint: {serviceName: 'zipkin-query', ipv4: '127.0.0.1', port: 9411}
+    }));
     const {spans: [testSpan]} = traceToMustache(testTrace);
     // skips empty Local Component, but still shows it as an address
-    testSpan.binaryAnnotations[0].key.should.equal('Local Address');
+    testSpan.tags[0].key.should.equal('Local Address');
   });
 
-  it('should tolerate spans without binary annotations', () => {
-    const testTrace = [{
+  it('should tolerate spans without tags', () => {
+    const testTrace = new SpanNode(clean({
       traceId: '2480ccca8df0fca5',
       name: 'get',
       id: '2480ccca8df0fca5',
+      kind: 'SERVER',
       timestamp: 1457186385375000,
       duration: 333000,
-      annotations: [{
-        timestamp: 1457186385375000,
-        value: 'sr',
-        endpoint: {serviceName: 'zipkin-query', ipv4: '127.0.0.1', port: 9411}
-      }, {
-        timestamp: 1457186385708000,
-        value: 'ss',
-        endpoint: {serviceName: 'zipkin-query', ipv4: '127.0.0.1', port: 9411}
-      }]
-    }];
+      localEndpoint: {serviceName: 'zipkin-query', ipv4: '127.0.0.1', port: 9411}
+    }));
     const {spans: [testSpan]} = traceToMustache(testTrace);
-    testSpan.annotations[0].value.should.equal('Server Receive');
-    testSpan.annotations[1].value.should.equal('Server Send');
+    testSpan.annotations[0].value.should.equal('Server Start');
+    testSpan.annotations[1].value.should.equal('Server Finish');
+  });
+
+  // TODO: we should really only allocate remote endpoints when on an uninstrumented link
+  it('should count spans for any endpoint', () => {
+    const testTrace = new SpanNode(clean({
+      traceId: '2480ccca8df0fca5',
+      id: '2480ccca8df0fca5',
+      kind: 'CLIENT',
+      timestamp: 1,
+      localEndpoint: frontend,
+      remoteEndpoint: frontend
+    }));
+    testTrace.addChild(new SpanNode(clean({
+      traceId: '2480ccca8df0fca5',
+      parentId: '2480ccca8df0fca5',
+      id: 'bf396325699c84bf',
+      name: 'foo',
+      timestamp: 2,
+      localEndpoint: backend
+    })));
+
+    const {serviceNameAndSpanCounts} = traceToMustache(testTrace);
+    serviceNameAndSpanCounts.should.eql([
+      {serviceName: 'backend', spanCount: 1},
+      {serviceName: 'frontend', spanCount: 1}
+    ]);
+  });
+
+  it('should count spans with no timestamp or duration', () => {
+    const testTrace = new SpanNode(clean({
+      traceId: '2480ccca8df0fca5',
+      id: '2480ccca8df0fca5',
+      kind: 'CLIENT',
+      timestamp: 1, // root always needs a timestamp
+      localEndpoint: frontend,
+      remoteEndpoint: frontend
+    }));
+    testTrace.addChild(new SpanNode(clean({
+      traceId: '2480ccca8df0fca5',
+      parentId: '2480ccca8df0fca5',
+      id: 'bf396325699c84bf',
+      name: 'foo',
+      localEndpoint: backend
+    })));
+
+    const {serviceNameAndSpanCounts} = traceToMustache(testTrace);
+    serviceNameAndSpanCounts.should.eql([
+      {serviceName: 'backend', spanCount: 1},
+      {serviceName: 'frontend', spanCount: 1}
+    ]);
+  });
+
+  /*
+   * The input data to the trace view is already sorted by timestamp. Span rows need to be added in
+   * depth-first order to ensure they can be collapsed by parent.
+   *
+   *          a
+   *        / | \
+   *       b  c  d
+   *      /|\
+   *     e f 1
+   *          \
+   *           2
+   */
+  it('should order spans by timestamp, root first, not by cause', () => {
+    // to prevent invalid trace errors, we need a timestamp on the root span.
+    const a = new SpanNode(clean({traceId: '1', id: 'a', timestamp: 1}));
+    const b = new SpanNode(clean({traceId: '1', id: 'b', parentId: 'a'}));
+    const c = new SpanNode(clean({traceId: '1', id: 'c', parentId: 'a'}));
+    const d = new SpanNode(clean({traceId: '1', id: 'd', parentId: 'a'}));
+    // root(a) has children b, c, d
+    a.addChild(b);
+    a.addChild(c);
+    a.addChild(d);
+    const e = new SpanNode(clean({traceId: '1', id: 'e', parentId: 'b'}));
+    const f = new SpanNode(clean({traceId: '1', id: 'f', parentId: 'b'}));
+    const g = new SpanNode(clean({traceId: '1', id: '1', parentId: 'b'}));
+    // child(b) has children e, f, g
+    b.addChild(e);
+    b.addChild(f);
+    b.addChild(g);
+    const h = new SpanNode(clean({traceId: '1', id: '2', parentId: '1'}));
+    // f has no children
+    // child(g) has child h
+    g.addChild(h);
+
+    const {spans} = traceToMustache(a);
+    expect(spans.map(s => s.spanId)).to.eql([
+      '000000000000000a',
+      '000000000000000b',
+      '000000000000000e',
+      '000000000000000f',
+      '0000000000000001',
+      '0000000000000002',
+      '000000000000000c',
+      '000000000000000d'
+    ]);
   });
 });
 
-describe('get root spans', () => {
-  it('should find root spans in a trace', () => {
-    const testTrace = [{
-      parentId: null, // root span (no parent)
-      id: 1
-    }, {
-      parentId: 1,
-      id: 2
-    }, {
-      parentId: 3, // root span (no parent with this id)
-      id: 4
-    }, {
-      parentId: 4,
-      id: 5
-    }];
-
-    const rootSpans = getRootSpans(testTrace);
-    rootSpans.should.eql([{
-      parentId: null,
-      id: 1
-    }, {
-      parentId: 3,
-      id: 4
-    }]);
-  });
-});
-
-describe('formatEndpoint', () => {
-  it('should format ip and port', () => {
-    formatEndpoint({ipv4: '150.151.152.153', port: 5000}).should.equal('150.151.152.153:5000');
-  });
-
-  it('should not use port when missing or zero', () => {
-    formatEndpoint({ipv4: '150.151.152.153'}).should.equal('150.151.152.153');
-    formatEndpoint({ipv4: '150.151.152.153', port: 0}).should.equal('150.151.152.153');
-  });
-
-  it('should put service name in parenthesis', () => {
-    formatEndpoint({ipv4: '150.151.152.153', port: 9042, serviceName: 'cassandra'}).should.equal(
-      '150.151.152.153:9042 (cassandra)'
-    );
-    formatEndpoint({ipv4: '150.151.152.153', serviceName: 'cassandra'}).should.equal(
-      '150.151.152.153 (cassandra)'
-    );
-  });
-
-  it('should not show empty service name', () => {
-    formatEndpoint({ipv4: '150.151.152.153', port: 9042, serviceName: ''}).should.equal(
-      '150.151.152.153:9042'
-    );
-    formatEndpoint({ipv4: '150.151.152.153', serviceName: ''}).should.equal(
-      '150.151.152.153'
-    );
-  });
-
-  it('should show service name missing IP', () => {
-    formatEndpoint({serviceName: 'rabbit'}).should.equal(
-      'rabbit'
-    );
-  });
-
-  it('should not crash on no data', () => {
-    formatEndpoint({}).should.equal('');
-  });
-
-  it('should put ipv6 in brackets', () => {
-    formatEndpoint({ipv6: '2001:db8::c001', port: 9042, serviceName: 'cassandra'}).should.equal(
-      '[2001:db8::c001]:9042 (cassandra)'
-    );
-
-    formatEndpoint({ipv6: '2001:db8::c001', port: 9042}).should.equal(
-      '[2001:db8::c001]:9042'
-    );
-
-    formatEndpoint({ipv6: '2001:db8::c001'}).should.equal(
-      '[2001:db8::c001]'
-    );
-  });
-});

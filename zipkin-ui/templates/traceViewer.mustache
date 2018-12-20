@@ -11,10 +11,10 @@
 {{#traceId}}
 <hr>
 <div class='row justify-content-start'>
-    <div class='col-md-2'><div href='#'><strong data-i18n="trace.duration">Duration:</strong> <span class='badge badge-dark'>{{duration}}</span></div></div>
-    <div class='col-md-2'><div href='#'><strong data-i18n="trace.service">Services:</strong> <span class='badge badge-dark'>{{services}}</span></div></div>
+    <div class='col-md-2'><div href='#'><strong data-i18n="trace.duration">Duration:</strong> <span class='badge badge-dark'>{{durationStr}}</span></div></div>
+    <div class='col-md-2'><div href='#'><strong data-i18n="trace.service">Services:</strong> <span class='badge badge-dark'>{{serviceNameAndSpanCounts.length}}</span></div></div>
     <div class='col-md-2'><div href='#'><strong data-i18n="trace.depth">Depth:</strong> <span class='badge badge-dark'>{{depth}}</span></div></div>
-    <div class='col-md-2'><div href='#'><strong data-i18n="trace.spans">Total Spans:</strong> <span class='badge badge-dark'>{{totalSpans}}</span></div></div>
+    <div class='col-md-2'><div href='#'><strong data-i18n="trace.spans.length">Total Spans:</strong> <span class='badge badge-dark'>{{spans.length}}</span></div></div>
     {{#logsUrl}}
     <div class='col-md-2'><div id='traceLogsLink'>
       <a class='btn btn-sm btn-secondary'  href='{{ logsUrl }}' target="_blank" role="button">Logs
@@ -27,22 +27,16 @@
   
   <form class='form-row mt-3' role='form'>
     <div class='form-group col-md-3' id='filterAllServices'>
-      <button type='button' class='btn btn-primary active' value='uiExpandAllSpans' data-i18n="trace.expand">Expand All</button>
-      <button type='button' class='btn btn-primary' value='uiCollapseAllSpans' data-i18n="trace.collapse">Collapse All</button>
-    </div>
-    <div class="form-group col-md-2">
-      <select data-placeholder='Filter Service Search' class='form-control' name='serviceFilterSearch' id='serviceFilterSearch'>
-        <option value=''></option>
-        {{#serviceCounts}}
-        <option value='{{name}}'>{{name}}</option>
-        {{/serviceCounts}}
-      </select>
+      <button id= 'expandAll' type='button' class='btn btn-primary' value='uiExpandAllSpans'
+      data-i18n="trace.expand">Expand All</button>
+      <button id= 'collapseAll' type='button' class='btn btn-primary' value='uiCollapseAllSpans'
+      data-i18n="trace.collapse">Collapse All</button>
     </div>
   </form>
   <div class='trace-details services'>
-  {{#serviceCounts}}
-    <span class='badge badge-info service-filter-label service-tag-filtered' data-service-name='{{name}}'>{{name}} x{{count}}</span>
-  {{/serviceCounts}}
+  {{#serviceNameAndSpanCounts}}
+    <span class='badge badge-info service-filter-label' data-service-name='{{serviceName}}'>{{serviceName}} x{{spanCount}}</span>
+  {{/serviceNameAndSpanCounts}}
   </div>
  </div>
 </div>
@@ -71,12 +65,12 @@
     data-service-names='{{serviceNames}}'
     data-duration-str='{{durationStr}}'
     data-duration='{{duration}}'
-    data-children='{{children}}'
+    data-child-ids='{{childIds}}'
     data-error-type='{{errorType}}'
   >
     <div class='handle'>
       <div class='service-name' style='margin-left: {{depth}}px'>
-        <span class='expander'>+</span>
+        <span class='expander'></span>
         <span class='text-truncate' data-toggle="tooltip" title={{serviceName}}>{{serviceName}}</span>
       </div>
     </div>
@@ -89,7 +83,7 @@
       <div class='duration ml-3' style='left: {{left}}%; width: {{width}}%'>
         {{durationStr}} : {{spanName}}
         {{#annotations}}
-        <div class='annotation{{#isCore}} core{{/isCore}}'
+        <div class='annotation{{#isDerived}} derived{{/isDerived}}'
           style='left: {{left}}%; width: {{width}}px'
           title='{{value}}'
           data-keys='endpoint,value,timestamp,relativeTime,serviceName'
@@ -103,14 +97,14 @@
       </div>
     </div>
 
-    {{#binaryAnnotations}}
-    <div class='binary-annotation'
+    {{#tags}}
+    <div class='tag'
       data-keys='key,value,type'
       data-key='{{key}}'
       data-value='{{value}}'
       data-type='{{annotationType}}'
     ></div>
-    {{/binaryAnnotations}}
+    {{/tags}}
   </div>
   {{/spans}}
 </div>
@@ -145,7 +139,7 @@
           </tbody>
         </table>
 
-        <table id='binaryAnnotations' class='table table-striped table-sm table-bordered'>
+        <table id='tags' class='table table-striped table-sm table-bordered'>
           <thead class="table-info"><tr>
             <th>Key</th>
             <th>Value</th>
@@ -159,12 +153,12 @@
         </table>
 
         <button class="btn btn-info btn-sm pull-right mt-1" type="button" data-toggle="collapse"
-                data-target="#moreInfo" aria-expanded="false" aria-controls="moreInfo" data-i18n="trace.more">More Info
+                data-target="#showIds" aria-expanded="false" aria-controls="showIds" data-i18n="trace.showIds">More Info
                 <span class="fas fa-chevron-circle-down"></span>
         </button>
         <hr/>
         <div class='clearfix'></div>
-        <div id='moreInfo' class='collapse'>
+        <div id='showIds' class='collapse'>
           <table class='table table-striped table-sm table-bordered'>
             <tbody>
               <tr>
@@ -202,7 +196,7 @@
     data-service-names='{{serviceNames}}'
     data-duration-str='{{durationStr}}'
     data-duration='{{duration}}'
-    data-children='{{children}}'
+    data-child-ids='{{childIds}}'
   >
     <div class='handle'>
       <div class='service-name' style='margin-left: {{depth}}px'>
@@ -219,7 +213,7 @@
       <div class='duration' style='left: {{left}}%; width: {{width}}%'>
         {{durationStr}} : {{spanName}}
         {{#annotations}}
-        <div class='annotation{{#isCore}} core{{/isCore}}'
+        <div class='annotation{{#isDerived}} core{{/isDerived}}'
           style='left: {{left}}%; width: {{width}}px'
           title='{{value}}'
           data-keys='endpoint,value,timestamp,relativeTime,serviceName'
@@ -233,14 +227,14 @@
       </div>
     </div>
 
-    {{#binaryAnnotations}}
-    <div class='binary-annotation'
+    {{#tags}}
+    <div class='tag'
       data-keys='key,value,type'
       data-key='{{key}}'
       data-value='{{value}}'
       data-type='{{annotationType}}'
     ></div>
-    {{/binaryAnnotations}}
+    {{/tags}}
   </div>
   {{/spansBackup}}
 </div>

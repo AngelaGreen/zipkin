@@ -4,20 +4,16 @@ import queryString from 'query-string';
 import $ from 'jquery';
 import {i18nInit} from '../component_ui/i18n';
 
-
 // extracted for testing. this code mutates spans and selectedSpans
-export function showSpans(spans, parents, children, selectedSpans) {
+export function showSpans(spans, parents, childIds, selectedSpans) {
   const family = new Set();
   $.each(selectedSpans, (i, $selected) => {
-    if ($selected.inFilters === 0) {
-      $selected.show();
-      $selected.addClass('highlight');
-    }
+    $selected.show();
+    $selected.addClass('highlight');
     $selected.expanded = true;
-    $selected.$expander.text('-');
-    $selected.inFilters += 1;
+    $selected.$expander.html('<i class="far fa-minus-square"></i>');
 
-    $.each(children[$selected.id], (j, cId) => {
+    $.each(childIds[$selected.id], (j, cId) => {
       family.add(cId);
       spans[cId].openParents += 1;
     });
@@ -34,28 +30,21 @@ export function showSpans(spans, parents, children, selectedSpans) {
   family.forEach(id => spans[id].show());
 }
 
-function hideSpan(span) {
-  if (span.inFilters > 0 || span.openChildren > 0 || span.openParents > 0) return;
-  span.hide();
-}
-
 // extracted for testing. this code mutates spans and selectedSpans
-export function hideSpans(spans, parents, children, selectedSpans, childrenOnly) {
+export function hideSpans(spans, parents, childIds, selectedSpans, childrenOnly) {
   const family = new Set();
   $.each(selectedSpans, (i, $selected) => {
-    $selected.inFilters -= 1;
-
-    if (!childrenOnly && $selected.inFilters === 0) {
-      $selected.removeClass('highlight');
-      hideSpan($selected);
+    if (!childrenOnly === 0) {
+      $selected.hide();
     }
-
+    $selected.removeClass('highlight');
     $selected.expanded = false;
-    $selected.$expander.text('+');
+    $selected.$expander.html('<i class="far fa-plus-square"></i>');
 
-    $.each(children[$selected.id], (j, cId) => {
+    $.each(childIds[$selected.id], (j, cId) => {
       family.add(cId);
-      spans[cId].openParents -= 1;
+      // Decrement only when there is an open parent
+      if (spans[cId].openParents >= 1) spans[cId].openParents -= 1;
     });
     if (!childrenOnly) {
       $.each(parents[$selected.id], (j, pId) => {
@@ -69,16 +58,17 @@ export function hideSpans(spans, parents, children, selectedSpans, childrenOnly)
       });
     }
   });
-  family.forEach(id => hideSpan(spans[id]));
+  family.forEach(id => hideSpans(spans, parents, childIds, [spans[id]], true));
+  family.forEach(id => spans[id].hide());
 }
 
-function spanChildren($span) {
-  const children = ($span.attr('data-children') || '').toString().split(',');
-  if (children.length === 1 && children[0] === '') {
+function spanChildIds($span) {
+  const childIds = ($span.attr('data-child-ids') || '').toString().split(',');
+  if (childIds.length === 1 && childIds[0] === '') {
     $span.find('.expander').hide();
     return [];
   } else {
-    return children;
+    return childIds;
   }
 }
 
@@ -87,7 +77,6 @@ function initSpan($span) {
   $span.id = id;
   $span.expanded = false;
   $span.$expander = $span.find('.expander');
-  $span.inFilters = 0;
   $span.openChildren = 0;
   $span.openParents = 0;
 
@@ -99,8 +88,9 @@ function initSpan($span) {
 
 export function initSpans($node) {
   const spans = {};
-  const children = {};
+  const childIds = {};
   const parents = {};
+  // this includes both local and remote service names
   const spansByService = {};
 
   $node.find('.span:not(#timeLabel)').each(function() {
@@ -109,7 +99,7 @@ export function initSpans($node) {
     const parentId = span.parentId;
 
     spans[id] = span;
-    children[id] = spanChildren(span);
+    childIds[id] = spanChildIds(span);
     parents[id] = !span.isRoot ? [parentId] : [];
     $.merge(parents[id], parents[parentId] || []);
 
@@ -122,7 +112,7 @@ export function initSpans($node) {
 
   return {
     spans,
-    children,
+    childIds,
     parents,
     spansByService
   };
@@ -130,12 +120,12 @@ export function initSpans($node) {
 
 export default component(function trace() {
   /*
-   * Next variables are setting up after initilization.
+   * Next variables are setting up after initialization.
    * see initSpans
    *
    * this.spans = {};
    * this.parents = {};
-   * this.children = {};
+   * this.childIds = {};
    * this.spansByService = {};
    */
   this.spansBackup = {};
@@ -153,7 +143,7 @@ export default component(function trace() {
     this.spansBackup[id] = $span;
   };
 
-  /* Returns a jquery object representing the spans in svc*/
+  /* Returns a jquery object representing the spans in svc */
   this.getSpansByService = function(svc) {
     let spans = this.spansByService[svc];
     if (spans === undefined) {
@@ -164,32 +154,12 @@ export default component(function trace() {
     return spans;
   };
 
-  this.filterAdded = function(e, data) {
-    if (this.actingOnAll) {
-      return;
-    }
-    const self = this;
-    const spans = this.getSpansByService(data.value).map(function() {
-      return self.spans[$(this).data('id')];
-    });
-    this.expandSpans(spans);
-  };
-
   this.expandSpans = function(spans) {
-    showSpans(this.spans, this.parents, this.children, spans);
-  };
-
-  this.filterRemoved = function(e, data) {
-    if (this.actingOnAll) return;
-    const self = this;
-    const spans = this.getSpansByService(data.value).map(function() {
-      return self.spans[$(this).data('id')];
-    });
-    this.collapseSpans(spans);
+    showSpans(this.spans, this.parents, this.childIds, spans);
   };
 
   this.collapseSpans = function(spans, childrenOnly) {
-    hideSpans(this.spans, this.parents, this.children, spans, childrenOnly);
+    hideSpans(this.spans, this.parents, this.childIds, spans, childrenOnly);
   };
 
   this.handleClick = function(e) {
@@ -206,6 +176,11 @@ export default component(function trace() {
     if ($span && $span.length > 0) {
       this.showSpanDetails($span);
     }
+  };
+
+  this.originalDuration = function() {
+    const markerText = $('#timeLabel-backup .time-marker-5').text();
+    return markerText ? parseFloat(markerText) : 0;
   };
 
   /* On mousedown and mousemove we need to show a selection area and zoomin
@@ -243,7 +218,7 @@ export default component(function trace() {
       self.$node.unbind('mouseup');
       /* Add code to calculate mintime and max time from pixel value of
        * mouse down and mouse move*/
-      const originalDuration = parseFloat($('#timeLabel-backup .time-marker-5').text());
+      const originalDuration = this.originalDuration();
       const spanClickViewLeftOffsetPx = $($('#trace-container .time-marker-0')[1]).offset().left;
       const spanClickViewWidthPx = $('#trace-container .time-marker-5').position().left;
 
@@ -293,7 +268,7 @@ export default component(function trace() {
   this.showSpanDetails = function($span) {
     const spanData = {
       annotations: [],
-      binaryAnnotations: []
+      tags: []
     };
 
     $.each($span.data('keys').split(','), (i, n) => { spanData[n] = $span.data(n); });
@@ -305,11 +280,11 @@ export default component(function trace() {
       spanData.annotations.push(anno);
     });
 
-    $span.find('.binary-annotation').each(function() {
+    $span.find('.tag').each(function() {
       const $this = $(this);
       const anno = {};
       $.each($this.data('keys').split(','), (e, n) => { anno[n] = $this.data(n); });
-      spanData.binaryAnnotations.push(anno);
+      spanData.tags.push(anno);
     });
 
     this.trigger('uiRequestSpanPanel', spanData);
@@ -327,18 +302,16 @@ export default component(function trace() {
     }
   };
 
-  this.triggerForAllServices = function(evt) {
-    $.each(this.spansByService, value => { this.trigger(document, evt, {value}); });
-  };
 
   this.expandAllSpans = function() {
     const self = this;
     self.actingOnAll = true;
     this.showSpinnerAround(() => {
-      showSpans(self.spans, self.parents, self.children, self.spans);
-      self.triggerForAllServices('uiAddServiceNameFilter');
+      showSpans(self.spans, self.parents, self.childIds, self.spans);
     });
     self.actingOnAll = false;
+    $('#expandAll').addClass('active');
+    $('#collapseAll').removeClass('active');
   };
 
   this.collapseAllSpans = function() {
@@ -346,17 +319,17 @@ export default component(function trace() {
     self.actingOnAll = true;
     this.showSpinnerAround(() => {
       $.each(self.spans, (id, $span) => {
-        $span.inFilters = 0;
         $span.openParents = 0;
         $span.openChildren = 0;
         $span.removeClass('highlight');
         $span.expanded = false;
-        $span.$expander.text('+');
+        $span.$expander.html('<i class="far fa-plus-square"></i>');
         if (!$span.isRoot) $span.hide();
       });
-      self.triggerForAllServices('uiRemoveServiceNameFilter');
     });
     self.actingOnAll = false;
+    $('#expandAll').removeClass('active');
+    $('#collapseAll').addClass('active');
   };
 
   /* This method modifies the span container view. It zooms in the span view
@@ -367,7 +340,7 @@ export default component(function trace() {
   this.zoomInSpans = function(node, data) {
     const self = this;
 
-    const originalDuration = parseFloat($('#timeLabel-backup .time-marker-5').text());
+    const originalDuration = this.originalDuration();
 
     const mintime = data.mintime;
     const maxtime = data.maxtime;
@@ -463,15 +436,8 @@ export default component(function trace() {
   };
 
   this.after('initialize', function() {
-    this.around('filterAdded', this.showSpinnerAround);
-    this.around('filterRemoved', this.showSpinnerAround);
-
     this.on('click', this.handleClick);
     this.on('mousedown', this.handleMouseDown);
-
-    this.on(document, 'uiAddServiceNameFilter', this.filterAdded);
-    this.on(document, 'uiRemoveServiceNameFilter', this.filterRemoved);
-
     this.on(document, 'uiExpandAllSpans', this.expandAllSpans);
     this.on(document, 'uiCollapseAllSpans', this.collapseAllSpans);
     this.on(document, 'uiZoomInSpans', this.zoomInSpans);
@@ -481,7 +447,7 @@ export default component(function trace() {
     const initData = initSpans(self.$node);
     this.spans = initData.spans;
     this.parents = initData.parents;
-    this.children = initData.children;
+    this.childIds = initData.childIds;
     this.spansByService = initData.spansByService;
 
     /* get spans from trace-container-backup*/

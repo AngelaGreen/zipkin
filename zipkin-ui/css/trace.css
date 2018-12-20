@@ -3,7 +3,7 @@
   margin-bottom: 50px;
 }
 
-#trace-container .binary-annotation {
+#trace-container .tag {
   display: none;
 }
 
@@ -68,7 +68,7 @@
   background: #0084b4;
   color: #fff;
   padding: 2px;
-  max-width: 13em;
+  max-width: 12em;
 }
 
 #trace-container .span .duration-container {
@@ -121,8 +121,11 @@
   margin-left: -6px;
 }
 
-/* Core annotations like "sr" "ss" are hidden to make more obvious user-defined ones */
-#trace-container .span .duration .annotation.core {
+/*
+ * Derived annotations like "Server Start" "Server Finish" are hidden to make
+ * the user-defined ones more obvious.
+ */
+#trace-container .span .duration .annotation.derived {
   display: none;
 }
 
@@ -189,11 +192,14 @@
   background: #f2dede;
 }
 
-#spanPanel #binaryAnnotations td.value {
+#spanPanel #tags td.value {
   word-break: break-all;
   max-width: 75%;
 }
-
+#spanPanel #annotations td.value {
+  word-break: break-all;
+  max-width: 75%;
+}
 #spanPanel #debugInfo td.value {
   word-break: break-all;
   max-width: 75%;

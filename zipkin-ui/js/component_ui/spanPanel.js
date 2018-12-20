@@ -17,7 +17,7 @@ function escapeHtml(string) {
   return String(string).replace(/[&<>"'`=\/]/g, s => entityMap[s]);
 }
 
-export function isDupeBinaryAnnotation(tagMap, anno) {
+export function isDupeTag(tagMap, anno) {
   if (!tagMap[anno.key]) {
     tagMap[anno.key] = anno.value; // eslint-disable-line no-param-reassign
   } else if (tagMap[anno.key] === anno.value) {
@@ -50,10 +50,9 @@ export function formatAnnotationValue(value) {
   }
 }
 
-// Binary annotations are tags, and sometimes the values are large, for example
-// json representing a query or a stack trace. Format these so that they don't
-// scroll off the side of the screen.
-export function formatBinaryAnnotationValue(value) {
+// Tags sometimes have large values, for example json representing a query or a
+// stack trace. Format these so that they don't scroll off the side of the screen.
+export function formatTagValue(value) {
   const type = $.type(value);
   if (type === 'object' || type === 'array' || value == null) {
     return `<pre><code>${escapeHtml(JSON.stringify(value, null, 2))}</code></pre>`;
@@ -66,8 +65,8 @@ export function formatBinaryAnnotationValue(value) {
 
 export default component(function spanPanel() {
   this.$annotationTemplate = null;
-  this.$binaryAnnotationTemplate = null;
-  this.$moreInfoTemplate = null;
+  this.$tagTemplate = null;
+  this.$showIdsTemplate = null;
 
   this.show = function(e, span) {
     const self = this;
@@ -79,7 +78,7 @@ export default component(function spanPanel() {
     this.$node.find('.service-names').text(span.serviceNames);
 
     const $annoBody = this.$node.find('#annotations tbody').text('');
-    $.each((span.annotations || []), (i, anno) => {
+    $.each(span.annotations, (i, anno) => {
       const $row = self.$annotationTemplate.clone();
       maybeMarkTransientError($row, anno);
       $row.find('td').each(function() {
@@ -99,10 +98,10 @@ export default component(function spanPanel() {
       $this.text((new Date(parseInt(timestamp, 10) / 1000)).toLocaleString());
     });
 
-    const $binAnnoBody = this.$node.find('#binaryAnnotations tbody').text('');
-    $.each((span.binaryAnnotations || []), (i, anno) => {
-      if (isDupeBinaryAnnotation(tagMap, anno)) return;
-      const $row = self.$binaryAnnotationTemplate.clone();
+    const $tagBody = this.$node.find('#tags tbody').text('');
+    $.each((span.tags || []), (i, anno) => {
+      if (isDupeTag(tagMap, anno)) return;
+      const $row = self.$tagTemplate.clone();
       if (anno.key === Constants.ERROR) {
         $row.addClass('anno-error-critical');
       }
@@ -110,22 +109,22 @@ export default component(function spanPanel() {
         const $this = $(this);
         const propertyName = $this.data('key');
         const text = propertyName === 'value'
-          ? formatBinaryAnnotationValue(anno.value)
+          ? formatTagValue(anno.value)
           : escapeHtml(anno[propertyName]);
         $this.append(text);
       });
-      $binAnnoBody.append($row);
+      $tagBody.append($row);
     });
 
-    const $moreInfoBody = this.$node.find('#moreInfo tbody').text('');
-    const moreInfo = [['traceId', span.traceId],
+    const $showIdsBody = this.$node.find('#showIds tbody').text('');
+    const showIds = [['traceId', span.traceId],
                       ['spanId', span.id],
                       ['parentId', span.parentId]];
-    $.each(moreInfo, (i, pair) => {
-      const $row = self.$moreInfoTemplate.clone();
+    $.each(showIds, (i, pair) => {
+      const $row = self.$showIdsTemplate.clone();
       $row.find('.key').text(pair[0]);
       $row.find('.value').text(pair[1]);
-      $moreInfoBody.append($row);
+      $showIdsBody.append($row);
     });
 
     this.$node.modal('show');
@@ -134,8 +133,8 @@ export default component(function spanPanel() {
   this.after('initialize', function() {
     this.$node.modal('hide');
     this.$annotationTemplate = this.$node.find('#annotations tbody tr').remove();
-    this.$binaryAnnotationTemplate = this.$node.find('#binaryAnnotations tbody tr').remove();
-    this.$moreInfoTemplate = this.$node.find('#moreInfo tbody tr').remove();
+    this.$tagTemplate = this.$node.find('#tags tbody tr').remove();
+    this.$showIdsTemplate = this.$node.find('#showIds tbody tr').remove();
     this.on(document, 'uiRequestSpanPanel', this.show);
   });
 });
