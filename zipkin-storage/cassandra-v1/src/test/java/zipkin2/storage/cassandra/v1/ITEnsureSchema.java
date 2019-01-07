@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenZipkin Authors
+ * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -34,17 +34,15 @@ abstract class ITEnsureSchema {
   }
 
   @Test public void installsTablesWhenMissing() {
-    session()
-      .execute(
-        "CREATE KEYSPACE "
-          + keyspace()
-          + " WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '1'};");
+    session().execute("CREATE KEYSPACE " + keyspace()
+      + " WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '1'};");
 
     Schema.ensureExists(keyspace(), session());
 
     KeyspaceMetadata metadata = session().getCluster().getMetadata().getKeyspace(keyspace());
     assertThat(metadata).isNotNull();
     assertThat(Schema.hasUpgrade1_defaultTtl(metadata)).isTrue();
+    assertThat(metadata.getTable("autocomplete_tags")).isNotNull();
   }
 
   @Test public void upgradesOldSchema() {
@@ -55,5 +53,6 @@ abstract class ITEnsureSchema {
     KeyspaceMetadata metadata = session().getCluster().getMetadata().getKeyspace(keyspace());
     assertThat(metadata).isNotNull();
     assertThat(Schema.hasUpgrade1_defaultTtl(metadata)).isTrue();
+    assertThat(Schema.hasUpgrade2_autocompleteTags(metadata)).isTrue();
   }
 }

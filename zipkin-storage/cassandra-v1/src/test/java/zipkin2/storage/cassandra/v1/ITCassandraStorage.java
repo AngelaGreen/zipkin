@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenZipkin Authors
+ * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -165,6 +165,19 @@ public class ITCassandraStorage {
 
     @Override protected StorageComponent storage() {
       return storage;
+    }
+
+    @Before @Override public void clear() {
+      dropKeyspace(backend.session(), keyspace(testName));
+    }
+  }
+
+  public static class ITAutocompleteTags extends zipkin2.storage.ITAutocompleteTags {
+    @ClassRule public static CassandraStorageRule backend = classRule();
+    @Rule public TestName testName = new TestName();
+
+    @Override protected StorageComponent.Builder storageBuilder() {
+      return backend.computeStorageBuilder().keyspace(keyspace(testName));
     }
 
     @Before @Override public void clear() {

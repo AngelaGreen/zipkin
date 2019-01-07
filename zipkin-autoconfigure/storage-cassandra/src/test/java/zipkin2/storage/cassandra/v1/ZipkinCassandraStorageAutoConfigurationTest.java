@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenZipkin Authors
+ * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -91,5 +91,47 @@ public class ZipkinCassandraStorageAutoConfigurationTest {
     context.refresh();
 
     assertThat(context.getBean(CassandraStorage.class).strictTraceId).isFalse();
+  }
+
+  @Test
+  public void autocompleteKeys_list() {
+    context = new AnnotationConfigApplicationContext();
+    TestPropertyValues.of(
+      "zipkin.storage.type:cassandra",
+      "zipkin.storage.autocomplete-keys:environment")
+      .applyTo(context);
+    Access.registerCassandra(context);
+    context.refresh();
+
+    assertThat(context.getBean(CassandraStorage.class).autocompleteKeys)
+      .containsOnly("environment");
+  }
+
+  @Test
+  public void autocompleteTtl() {
+    context = new AnnotationConfigApplicationContext();
+    TestPropertyValues.of(
+      "zipkin.storage.type:cassandra",
+      "zipkin.storage.autocomplete-ttl:60000")
+      .applyTo(context);
+    Access.registerCassandra(context);
+    context.refresh();
+
+    assertThat(context.getBean(CassandraStorage.class).autocompleteTtl)
+      .isEqualTo(60000);
+  }
+
+  @Test
+  public void autocompleteCardinality() {
+    context = new AnnotationConfigApplicationContext();
+    TestPropertyValues.of(
+      "zipkin.storage.type:cassandra",
+      "zipkin.storage.autocomplete-cardinality:5000")
+      .applyTo(context);
+    Access.registerCassandra(context);
+    context.refresh();
+
+    assertThat(context.getBean(CassandraStorage.class).autocompleteCardinality)
+      .isEqualTo(5000);
   }
 }

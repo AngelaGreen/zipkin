@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenZipkin Authors
+ * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -16,13 +16,17 @@ package zipkin2.storage.cassandra.v1;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.querybuilder.QueryBuilder;
 import com.google.common.cache.CacheBuilderSpec;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import zipkin2.CheckResult;
 import zipkin2.internal.Nullable;
+import zipkin2.storage.AutocompleteTags;
 import zipkin2.storage.QueryRequest;
 import zipkin2.storage.SpanConsumer;
 import zipkin2.storage.SpanStore;
 import zipkin2.storage.StorageComponent;
+import zipkin2.storage.cassandra.internal.call.DeduplicatingCall;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -57,6 +61,9 @@ public final class CassandraStorage extends StorageComponent {
     int indexCacheMax = 100000;
     int indexCacheTtl = 60;
     int indexFetchMultiplier = 3;
+    List<String> autocompleteKeys = new ArrayList<>();
+    int autocompleteTtl = (int) TimeUnit.HOURS.toMillis(1);
+    int autocompleteCardinality = 5 * 4000; // Ex. 5 site tags with cardinality 4000 each
 
     /**
      * Used to avoid hot spots when writing indexes used to query by service name or annotation.
@@ -83,6 +90,24 @@ public final class CassandraStorage extends StorageComponent {
     @Override
     public Builder searchEnabled(boolean searchEnabled) {
       this.searchEnabled = searchEnabled;
+      return this;
+    }
+
+    @Override public Builder autocompleteKeys(List<String> keys) {
+      if (keys == null) throw new NullPointerException("keys == null");
+      this.autocompleteKeys = keys;
+      return this;
+    }
+
+    @Override public Builder autocompleteTtl(int autocompleteTtl) {
+      if (autocompleteTtl <= 0) throw new IllegalArgumentException("autocompleteTtl <= 0");
+      this.autocompleteTtl = autocompleteTtl;
+      return this;
+    }
+
+    @Override public Builder autocompleteCardinality(int autocompleteCardinality) {
+      if (autocompleteCardinality <= 0) throw new IllegalArgumentException("autocompleteCardinality <= 0");
+      this.autocompleteCardinality = autocompleteCardinality;
       return this;
     }
 
@@ -255,12 +280,16 @@ public final class CassandraStorage extends StorageComponent {
   final int indexFetchMultiplier;
   final boolean strictTraceId, searchEnabled;
   final LazySession session;
+  final List<String> autocompleteKeys;
+  final int autocompleteTtl;
+  final int autocompleteCardinality;
 
   /** close is typically called from a different thread */
   volatile boolean closeCalled;
 
   volatile CassandraSpanConsumer spanConsumer;
   volatile CassandraSpanStore spanStore;
+  volatile CassandraAutocompleteTags tagStore;
 
   CassandraStorage(Builder b) {
     this.contactPoints = b.contactPoints;
@@ -286,6 +315,9 @@ public final class CassandraStorage extends StorageComponent {
       this.indexCacheSpec = null;
     }
     this.indexFetchMultiplier = b.indexFetchMultiplier;
+    this.autocompleteKeys = b.autocompleteKeys;
+    this.autocompleteTtl = b.autocompleteTtl;
+    this.autocompleteCardinality = b.autocompleteCardinality;
   }
 
   /** Lazy initializes or returns the session in use by this storage component. */
@@ -304,6 +336,17 @@ public final class CassandraStorage extends StorageComponent {
       }
     }
     return spanStore;
+  }
+
+  @Override public AutocompleteTags autocompleteTags() {
+    if (tagStore == null) {
+      synchronized (this) {
+        if (tagStore == null) {
+          tagStore = new CassandraAutocompleteTags(this);
+        }
+      }
+    }
+    return tagStore;
   }
 
   /** {@inheritDoc} Memoized in order to avoid re-preparing statements */

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenZipkin Authors
+ * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import zipkin2.Annotation;
 import zipkin2.Call;
@@ -32,24 +33,25 @@ import zipkin2.v1.V1Span;
 import zipkin2.v1.V2SpanConverter;
 
 final class CassandraSpanConsumer implements SpanConsumer {
-  static final int WRITTEN_NAMES_TTL =
-      Integer.getInteger("zipkin.store.cassandra.internal.writtenNamesTtl", 60 * 60 * 1000);
-
   final InsertTrace.Factory insertTrace;
   final InsertServiceName.Factory insertServiceName;
   final InsertSpanName.Factory insertSpanName;
   final Schema.Metadata metadata;
   final CompositeIndexer indexer;
+  final InsertAutocompleteValue.Factory insertAutocompleteValue;
+  final Set<String> autocompleteKeys;
 
   CassandraSpanConsumer(CassandraStorage storage, CacheBuilderSpec indexCacheSpec) {
-    Session session = storage.session.get();
+    Session session = storage.session();
     metadata = Schema.readMetadata(session);
     int indexTtl = metadata.hasDefaultTtl ? 0 : storage.indexTtl;
     int spanTtl = metadata.hasDefaultTtl ? 0 : storage.spanTtl;
     insertTrace = new InsertTrace.Factory(session, metadata, spanTtl);
-    insertServiceName = new InsertServiceName.Factory(session, indexTtl, WRITTEN_NAMES_TTL);
-    insertSpanName = new InsertSpanName.Factory(session, indexTtl, WRITTEN_NAMES_TTL);
+    insertServiceName = new InsertServiceName.Factory(storage, indexTtl);
+    insertSpanName = new InsertSpanName.Factory(storage, indexTtl);
+    insertAutocompleteValue = new InsertAutocompleteValue.Factory(storage, indexTtl);
     indexer = new CompositeIndexer(session, indexCacheSpec, storage.bucketCount, indexTtl);
+    autocompleteKeys = new LinkedHashSet<>(storage.autocompleteKeys);
   }
 
   /**
@@ -66,6 +68,7 @@ final class CassandraSpanConsumer implements SpanConsumer {
     Set<InsertTrace.Input> insertTraces = new LinkedHashSet<>();
     Set<String> insertServiceNames = new LinkedHashSet<>();
     Set<InsertSpanName.Input> insertSpanNames = new LinkedHashSet<>();
+    Set<Map.Entry<String, String>> autocompleteTags = new LinkedHashSet<>();
 
     for (Span v2 : rawSpans) {
       V1Span span = converter.convert(v2);
@@ -80,7 +83,9 @@ final class CassandraSpanConsumer implements SpanConsumer {
         if (span.name() == null) continue;
         insertSpanNames.add(insertSpanName.newInput(serviceName, span.name()));
       }
-
+      for (Map.Entry<String, String> entry : v2.tags().entrySet()) {
+        if (autocompleteKeys.contains(entry.getKey())) autocompleteTags.add(entry);
+      }
       if (ts_micro == 0L) continue; // search is only valid with a timestamp, don't index w/o it!
       spansToIndex.add(span);
     }
@@ -95,7 +100,9 @@ final class CassandraSpanConsumer implements SpanConsumer {
     for (InsertSpanName.Input insert : insertSpanNames) {
       calls.add(insertSpanName.create(insert));
     }
-
+    for (Map.Entry<String, String> entry : autocompleteTags) {
+      calls.add(insertAutocompleteValue.create(entry));
+    }
     indexer.index(spansToIndex.build(), calls);
     if (calls.size() == 1) return calls.get(0).map(r -> null);
     return new StoreSpansCall(calls);
@@ -104,8 +111,9 @@ final class CassandraSpanConsumer implements SpanConsumer {
   /** Clears any caches */
   @VisibleForTesting
   void clear() {
-    insertServiceName.cache.clear();
-    insertSpanName.cache.clear();
+    insertServiceName.clear();
+    insertSpanName.clear();
+    insertAutocompleteValue.clear();
     indexer.clear();
   }
 

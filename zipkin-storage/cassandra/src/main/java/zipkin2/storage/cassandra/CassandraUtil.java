@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenZipkin Authors
+ * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -49,12 +49,12 @@ final class CassandraUtil {
       Long.getLong("zipkin.store.cassandra.internal.durationIndexBucket", 24 * 60 * 60);
 
   public static int durationIndexBucket(long ts_micro) {
-    // if the window constant has microsecond precision, the division produces negative values
+    // if the window constant has microsecond precision, the division produces negative getValues
     return (int) (ts_micro / (DURATION_INDEX_BUCKET_WINDOW_SECONDS * 1_000_000));
   }
 
   /**
-   * Returns a set of annotation values and tags joined on equals, delimited by ░
+   * Returns a set of annotation getValues and tags joined on equals, delimited by ░
    *
    * @see QueryRequest#annotationQuery()
    */

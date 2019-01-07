@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenZipkin Authors
+ * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -97,6 +97,19 @@ public class ITElasticsearchStorageV5 {
 
     @Before @Override public void clear() throws IOException {
       storage.clear();
+    }
+  }
+
+  public static class ITAutocompleteTags extends zipkin2.storage.ITAutocompleteTags {
+    @ClassRule public static ElasticsearchStorageRule backend = classRule();
+    @Rule public TestName testName = new TestName();
+
+    @Override protected StorageComponent.Builder storageBuilder() {
+      return backend.computeStorageBuilder().index(index(testName));
+    }
+
+    @Before @Override public void clear() throws IOException {
+      ((ElasticsearchStorage) storage).clear();
     }
   }
 

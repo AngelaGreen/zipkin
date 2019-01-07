@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenZipkin Authors
+ * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -13,6 +13,7 @@
  */
 package zipkin2.autoconfigure.storage.cassandra;
 
+import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,9 +46,16 @@ class ZipkinCassandraStorageAutoConfiguration {
   StorageComponent storage(
       ZipkinCassandraStorageProperties properties,
       @Value("${zipkin.storage.strict-trace-id:true}") boolean strictTraceId,
-      @Value("${zipkin.storage.search-enabled:true}") boolean searchEnabled) {
-    CassandraStorage.Builder builder =
-        properties.toBuilder().strictTraceId(strictTraceId).searchEnabled(searchEnabled);
+      @Value("${zipkin.storage.search-enabled:true}") boolean searchEnabled,
+      @Value("${zipkin.storage.autocomplete-keys:}") List<String> autocompleteKeys,
+      @Value("${zipkin.storage.autocomplete-ttl:3600000}") int autocompleteTtl,
+      @Value("${zipkin.storage.autocomplete-cardinality:20000}") int autocompleteCardinality) {
+    CassandraStorage.Builder builder = properties.toBuilder()
+      .strictTraceId(strictTraceId)
+      .searchEnabled(searchEnabled)
+      .autocompleteKeys(autocompleteKeys)
+      .autocompleteTtl(autocompleteTtl)
+      .autocompleteCardinality(autocompleteCardinality);
     return tracingSessionFactory == null
         ? builder.build()
         : builder.sessionFactory(tracingSessionFactory).build();

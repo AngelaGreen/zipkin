@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenZipkin Authors
+ * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -13,6 +13,7 @@
  */
 package zipkin2.autoconfigure.storage.elasticsearch;
 
+import java.util.List;
 import java.util.logging.Logger;
 import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
@@ -65,12 +66,18 @@ public class ZipkinElasticsearchStorageAutoConfiguration {
       @Qualifier("zipkinElasticsearchHttp") OkHttpClient client,
       @Value("${zipkin.query.lookback:86400000}") int namesLookback,
       @Value("${zipkin.storage.strict-trace-id:true}") boolean strictTraceId,
-      @Value("${zipkin.storage.search-enabled:true}") boolean searchEnabled) {
+      @Value("${zipkin.storage.search-enabled:true}") boolean searchEnabled,
+      @Value("${zipkin.storage.autocomplete-keys:}") List<String> autocompleteKeys,
+      @Value("${zipkin.storage.autocomplete-ttl:3600000}") int autocompleteTtl,
+      @Value("${zipkin.storage.autocomplete-cardinality:20000}") int autocompleteCardinality) {
     return elasticsearch
         .toBuilder(client)
         .namesLookback(namesLookback)
         .strictTraceId(strictTraceId)
-        .searchEnabled(searchEnabled);
+        .searchEnabled(searchEnabled)
+        .autocompleteKeys(autocompleteKeys)
+        .autocompleteTtl(autocompleteTtl)
+        .autocompleteCardinality(autocompleteCardinality);
   }
 
   static final class HttpLoggingSet implements Condition {

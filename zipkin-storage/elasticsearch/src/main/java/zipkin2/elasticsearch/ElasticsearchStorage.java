@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenZipkin Authors
+ * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import okhttp3.HttpUrl;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -33,10 +34,12 @@ import zipkin2.elasticsearch.internal.IndexNameFormatter;
 import zipkin2.elasticsearch.internal.client.HttpCall;
 import zipkin2.internal.Nullable;
 import zipkin2.internal.Platform;
+import zipkin2.storage.AutocompleteTags;
 import zipkin2.storage.SpanConsumer;
 import zipkin2.storage.SpanStore;
 import zipkin2.storage.StorageComponent;
 
+import static zipkin2.elasticsearch.ElasticsearchAutocompleteTags.AUTOCOMPLETE;
 import static zipkin2.elasticsearch.ElasticsearchSpanStore.DEPENDENCY;
 import static zipkin2.elasticsearch.ElasticsearchSpanStore.SPAN;
 import static zipkin2.elasticsearch.internal.JsonReaders.enterPath;
@@ -67,7 +70,10 @@ public abstract class ElasticsearchStorage extends zipkin2.storage.StorageCompon
         .indexReplicas(1)
         .namesLookback(86400000)
         .shutdownClientOnClose(false)
-        .flushOnWrites(false);
+        .flushOnWrites(false)
+        .autocompleteKeys(Collections.emptyList())
+        .autocompleteTtl((int) TimeUnit.HOURS.toMillis(1))
+        .autocompleteCardinality(5 * 4000); // Ex. 5 site tags with cardinality 4000 each
   }
 
   public static Builder newBuilder() {
@@ -186,6 +192,18 @@ public abstract class ElasticsearchStorage extends zipkin2.storage.StorageCompon
     @Override
     public abstract Builder searchEnabled(boolean searchEnabled);
 
+    /** {@inheritDoc} */
+    @Override
+    public abstract Builder autocompleteKeys(List<String> autocompleteKeys);
+
+    /** {@inheritDoc} */
+    @Override
+    public abstract Builder autocompleteTtl(int autocompleteTtl);
+
+    /** {@inheritDoc} */
+    @Override
+    public abstract Builder autocompleteCardinality(int autocompleteCardinality);
+
     @Override
     public abstract ElasticsearchStorage build();
 
@@ -211,6 +229,12 @@ public abstract class ElasticsearchStorage extends zipkin2.storage.StorageCompon
 
   abstract boolean searchEnabled();
 
+  abstract List<String> autocompleteKeys();
+
+  abstract int autocompleteTtl();
+
+  abstract int autocompleteCardinality();
+
   abstract int indexShards();
 
   abstract int indexReplicas();
@@ -223,6 +247,12 @@ public abstract class ElasticsearchStorage extends zipkin2.storage.StorageCompon
   public SpanStore spanStore() {
     ensureIndexTemplates();
     return new ElasticsearchSpanStore(this);
+  }
+
+  @Override
+  public AutocompleteTags autocompleteTags() {
+    ensureIndexTemplates();
+    return new ElasticsearchAutocompleteTags(this);
   }
 
   @Override
@@ -321,6 +351,8 @@ public abstract class ElasticsearchStorage extends zipkin2.storage.StorageCompon
       EnsureIndexTemplate.apply(http(), index + ":" + SPAN + "_template", templates.span());
       EnsureIndexTemplate.apply(
           http(), index + ":" + DEPENDENCY + "_template", templates.dependency());
+      EnsureIndexTemplate.apply(
+        http(), index + ":" + AUTOCOMPLETE + "_template", templates.autocomplete());
       return templates;
     } catch (IOException e) {
       throw Platform.get().uncheckedIOException(e);

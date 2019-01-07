@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenZipkin Authors
+ * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -31,10 +31,11 @@ import zipkin2.storage.StrictTraceId;
 
 import static java.util.Arrays.asList;
 
-final class ElasticsearchSpanStore implements SpanStore {
+final class ElasticsearchSpanStore implements SpanStore{
 
   static final String SPAN = "span";
   static final String DEPENDENCY = "dependency";
+
   /** To not produce unnecessarily long queries, we don't look back further than first ES support */
   static final long EARLIEST_MS = 1456790400000L; // March 2016
 

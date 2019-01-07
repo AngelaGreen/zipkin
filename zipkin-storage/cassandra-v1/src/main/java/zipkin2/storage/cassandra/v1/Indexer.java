@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenZipkin Authors
+ * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -40,9 +40,9 @@ import zipkin2.v1.V1Span;
 
 /**
  * Inserts index rows into Cassandra according to {@link IndexSupport} of a table. This skips
- * entries that don't improve results based on {@link QueryRequest#endTs} and {@link
- * QueryRequest#lookback}. For example, it doesn't insert rows that only vary on timestamp and exist
- * between timestamps of existing rows.
+ * entries that don't improve results based on {@link QueryRequest#endTs()} and {@link
+ * QueryRequest#lookback()}. For example, it doesn't insert rows that only vary on timestamp and
+ * exist between timestamps of existing rows.
  */
 final class Indexer {
   static final Logger LOG = LoggerFactory.getLogger(Indexer.class);

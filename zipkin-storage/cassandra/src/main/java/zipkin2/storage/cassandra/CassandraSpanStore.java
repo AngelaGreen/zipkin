@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenZipkin Authors
+ * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -62,7 +62,6 @@ class CassandraSpanStore implements SpanStore { // not final for testing
     if (searchEnabled) {
       KeyspaceMetadata md = Schema.ensureKeyspaceMetadata(session, storage.keyspace());
       indexTtl = md.getTable(TABLE_TRACE_BY_SERVICE_SPAN).getOptions().getDefaultTimeToLive();
-
       spanNames = new SelectSpanNames.Factory(session);
       serviceNames = new SelectServiceNames.Factory(session).create();
       traceIdsFromServiceSpan = new SelectTraceIdsFromServiceSpan.Factory(session);

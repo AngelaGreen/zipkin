@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 The OpenZipkin Authors
+ * Copyright 2015-2019 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -15,6 +15,7 @@ package zipkin2.storage.cassandra.v1;
 
 import zipkin2.Endpoint;
 import zipkin2.Span;
+import zipkin2.storage.AutocompleteTags;
 import zipkin2.storage.QueryRequest;
 import zipkin2.storage.SpanStore;
 
@@ -80,6 +81,9 @@ final class Tables {
    * and 9).
    */
   static final String ANNOTATIONS_INDEX = "annotations_index";
+
+  /** This table supports {@link AutocompleteTags#getValues(String key)}. */
+  static final String TABLE_AUTOCOMPLETE_TAGS = "autocomplete_tags";
 
   private Tables() {}
 }
