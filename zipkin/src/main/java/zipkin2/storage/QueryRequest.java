@@ -98,6 +98,11 @@ public final class QueryRequest {
     return limit;
   }
 
+  /** Sort order */
+  public String sortOrder() {
+    return sortOrder;
+  }
+
   /**
    * Corresponds to query parameter "annotationQuery". Ex. "http.method=GET and error"
    *
@@ -131,6 +136,7 @@ public final class QueryRequest {
     Long minDuration, maxDuration;
     long endTs, lookback;
     int limit;
+    String sortOrder;
 
     Builder(QueryRequest source) {
       serviceName = source.serviceName;
@@ -141,6 +147,7 @@ public final class QueryRequest {
       endTs = source.endTs;
       lookback = source.lookback;
       limit = source.limit;
+      sortOrder = source.sortOrder;
     }
 
     /** @see QueryRequest#serviceName() */
@@ -216,6 +223,12 @@ public final class QueryRequest {
       return this;
     }
 
+    /** @see QueryRequest#sortOrder() */
+    public Builder sortOrder(String sortOrder) {
+      this.sortOrder = sortOrder;
+      return this;
+    }
+
     public final QueryRequest build() {
       // coerce service and span names to lowercase
       if (serviceName != null) serviceName = serviceName.toLowerCase(Locale.ROOT);
@@ -238,6 +251,8 @@ public final class QueryRequest {
         throw new IllegalArgumentException("maxDuration is only valid with minDuration");
       }
 
+      if (sortOrder == null || "".equals(sortOrder)) sortOrder = "duration-desc";
+
       return new QueryRequest(
         serviceName,
         spanName,
@@ -246,7 +261,8 @@ public final class QueryRequest {
         maxDuration,
         endTs,
         lookback,
-        limit
+        limit,
+        sortOrder
       );
     }
 
@@ -326,6 +342,7 @@ public final class QueryRequest {
   final Long minDuration, maxDuration;
   final long endTs, lookback;
   final int limit;
+  final String sortOrder;
 
   QueryRequest(
     @Nullable String serviceName,
@@ -335,7 +352,8 @@ public final class QueryRequest {
     @Nullable Long maxDuration,
     long endTs,
     long lookback,
-    int limit) {
+    int limit,
+    String sortOrder) {
     this.serviceName = serviceName;
     this.spanName = spanName;
     this.annotationQuery = annotationQuery;
@@ -344,6 +362,7 @@ public final class QueryRequest {
     this.endTs = endTs;
     this.lookback = lookback;
     this.limit = limit;
+    this.sortOrder = sortOrder;
   }
 
   @Override
@@ -356,7 +375,8 @@ public final class QueryRequest {
       + "maxDuration=" + maxDuration + ", "
       + "endTs=" + endTs + ", "
       + "lookback=" + lookback + ", "
-      + "limit=" + limit
+      + "limit=" + limit + ", "
+      + "sortOrder=" + sortOrder
       + "}";
   }
 }

@@ -21,6 +21,7 @@ public class Aggregation {
   transient final String field;
   AggTerms terms;
   Map<String, String> min;
+  Map<String, String> max;
   Map<String, Aggregation> aggs;
 
   Aggregation(String field) {
@@ -41,6 +42,12 @@ public class Aggregation {
   public static Aggregation min(String field) {
     Aggregation result = new Aggregation(field);
     result.min = Collections.singletonMap("field", field);
+    return result;
+  }
+
+  public static Aggregation max(String field) {
+    Aggregation result = new Aggregation(field);
+    result.max = Collections.singletonMap("field", field);
     return result;
   }
 

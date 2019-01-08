@@ -92,16 +92,28 @@ final class ElasticsearchSpanStore implements SpanStore{
     // So we fudge and order on the first span among the filtered spans - in practice, there should
     // be no significant difference in user experience since span start times are usually very
     // close to each other in human time.
-    Aggregation traceIdTimestamp =
-        Aggregation.terms("traceId", request.limit())
-            .addSubAggregation(Aggregation.min("timestamp_millis"))
-            .orderBy("timestamp_millis", "desc");
+    Aggregation traceIdSortOrder =
+        Aggregation.terms("traceId", request.limit());
+
+    if ("duration-asc".equals(request.sortOrder())) {
+      traceIdSortOrder.addSubAggregation(Aggregation.min("duration"))
+        .orderBy("duration", "asc");
+    } else if ("timestamp-desc".equals(request.sortOrder())) {
+      traceIdSortOrder.addSubAggregation(Aggregation.max("timestamp_millis"))
+        .orderBy("timestamp_millis", "desc");
+    } else if ("timestamp-asc".equals(request.sortOrder())) {
+      traceIdSortOrder.addSubAggregation(Aggregation.min("timestamp_millis"))
+        .orderBy("timestamp_millis", "asc");
+    } else {
+      traceIdSortOrder.addSubAggregation(Aggregation.max("duration"))
+        .orderBy("duration", "desc");
+    }
 
     List<String> indices = indexNameFormatter.formatTypeAndRange(SPAN, beginMillis, endMillis);
     if (indices.isEmpty()) return Call.emptyList();
 
     SearchRequest esRequest =
-        SearchRequest.create(indices).filters(filters).addAggregation(traceIdTimestamp);
+        SearchRequest.create(indices).filters(filters).addAggregation(traceIdSortOrder);
 
     HttpCall<List<String>> traceIdsCall = search.newCall(esRequest, BodyConverters.KEYS);
 
