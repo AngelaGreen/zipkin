@@ -120,8 +120,10 @@ final class ElasticsearchSpanStore implements SpanStore{
 
     HttpCall<List<String>> traceIdsCall = search.newCall(esRequest, BodyConverters.KEYS);
 
+    int spansSize = request.limit() * SearchRequest.MAX_RESULT_WINDOW;
+    if (spansSize > SearchRequest.MAX_SPANS_SIZE) spansSize = SearchRequest.MAX_SPANS_SIZE;
     Call<List<List<Span>>> result =
-        traceIdsCall.flatMap(new GetSpansByTraceId(search, indices)).map(groupByTraceId);
+        traceIdsCall.flatMap(new GetSpansByTraceId(search, indices, spansSize)).map(groupByTraceId);
     // Elasticsearch lookup by trace ID is by the full 128-bit length, but there's still a chance of
     // clash on lower-64 bit. When strict trace ID is enabled, we only filter client-side on clash.
     return strictTraceId ? result.map(StrictTraceId.filterTraces(request)) : result;
@@ -221,17 +223,19 @@ final class ElasticsearchSpanStore implements SpanStore{
   static final class GetSpansByTraceId implements Call.FlatMapper<List<String>, List<Span>> {
     final SearchCallFactory search;
     final List<String> indices;
+    final Integer size;
 
-    GetSpansByTraceId(SearchCallFactory search, List<String> indices) {
+    GetSpansByTraceId(SearchCallFactory search, List<String> indices, Integer size) {
       this.search = search;
       this.indices = indices;
+      this.size = size;
     }
 
     @Override
     public Call<List<Span>> map(List<String> input) {
       if (input.isEmpty()) return Call.emptyList();
 
-      SearchRequest getTraces = SearchRequest.create(indices).terms("traceId", input);
+      SearchRequest getTraces = SearchRequest.create(indices).size(size).terms("traceId", input);
       return search.newCall(getTraces, BodyConverters.SPANS);
     }
 

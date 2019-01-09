@@ -38,7 +38,9 @@ public final class SearchRequest {
    *
    * <p> See https://www.elastic.co/guide/en/elasticsearch/reference/current/search-request-from-size.html
    */
-  static final int MAX_RESULT_WINDOW = 200; // the default elasticsearch allowed limit
+  public static final int MAX_RESULT_WINDOW = 200; // the default elasticsearch allowed limit
+
+  public static final int MAX_SPANS_SIZE = 10000;
 
   transient final List<String> indices;
   @Nullable transient final String type;
@@ -63,6 +65,11 @@ public final class SearchRequest {
       add(new Term(field, value));
       return this;
     }
+  }
+
+  public SearchRequest size(Integer size) {
+    this.size = size;
+    return this;
   }
 
   public SearchRequest filters(Filters filters) {
