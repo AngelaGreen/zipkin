@@ -59,7 +59,7 @@ export function convertToApiQuery(source) {
       delete query[key];
     }
   });
-  delete query.sortOrder;
+  // delete query.sortOrder;
   return query;
 }
 
