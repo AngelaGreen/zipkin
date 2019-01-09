@@ -17,10 +17,13 @@ import com.datastax.driver.core.ProtocolVersion;
 import com.datastax.driver.core.Session;
 import com.google.common.collect.ContiguousSet;
 import com.google.common.collect.Range;
+
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import zipkin2.Call;
@@ -151,6 +154,11 @@ public final class CassandraSpanStore implements SpanStore {
     // make sure we have a 16 or 32 character trace ID
     String normalizedTraceId = Span.normalizeTraceId(traceId);
     return spans.newCall(normalizedTraceId);
+  }
+
+  @Override
+  public List<Span> getSpans(String traceId) throws IOException {
+    return getTrace(traceId).execute();
   }
 
   @Override

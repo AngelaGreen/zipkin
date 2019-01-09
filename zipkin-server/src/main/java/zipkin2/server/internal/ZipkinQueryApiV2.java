@@ -131,7 +131,7 @@ public class ZipkinQueryApiV2 {
       method = RequestMethod.GET,
       produces = APPLICATION_JSON_VALUE)
   public String getTrace(@PathVariable String traceIdHex, WebRequest request) throws IOException {
-    List<Span> trace = storage.spanStore().getTrace(traceIdHex).execute();
+    List<Span> trace = storage.spanStore().getSpans(traceIdHex);
     if (trace.isEmpty()) throw new TraceNotFoundException(traceIdHex);
     return new String(SpanBytesEncoder.JSON_V2.encodeList(trace), UTF_8);
   }

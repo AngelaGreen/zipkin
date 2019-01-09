@@ -13,6 +13,7 @@
  */
 package zipkin2.storage;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -331,6 +332,11 @@ public final class InMemoryStorage extends StorageComponent implements SpanStore
       }
     }
     return Call.create(filtered);
+  }
+
+  @Override
+  public List<Span> getSpans(String traceId) throws IOException {
+    return getTrace(traceId).execute();
   }
 
   @Override

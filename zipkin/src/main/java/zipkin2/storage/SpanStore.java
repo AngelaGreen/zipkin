@@ -13,6 +13,7 @@
  */
 package zipkin2.storage;
 
+import java.io.IOException;
 import java.util.List;
 import zipkin2.Call;
 import zipkin2.DependencyLink;
@@ -48,6 +49,8 @@ public interface SpanStore {
    * @param traceId the {@link Span#traceId() trace ID}
    */
   Call<List<Span>> getTrace(String traceId);
+
+  List<Span> getSpans(String traceId) throws IOException;
 
   /**
    * Retrieves all {@link Span#localEndpoint() local} and {@link Span#remoteEndpoint() remote}

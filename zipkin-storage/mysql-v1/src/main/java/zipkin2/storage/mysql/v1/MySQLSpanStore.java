@@ -13,6 +13,7 @@
  */
 package zipkin2.storage.mysql.v1;
 
+import java.io.IOException;
 import java.util.List;
 import zipkin2.Call;
 import zipkin2.DependencyLink;
@@ -66,6 +67,11 @@ final class MySQLSpanStore implements SpanStore {
       dataSourceCallFactory.create(
         selectFromSpansAndAnnotationsFactory.create(traceIdHigh, traceId));
     return strictTraceId ? result.map(StrictTraceId.filterSpans(hexTraceId)) : result;
+  }
+
+  @Override
+  public List<Span> getSpans(String traceId) throws IOException {
+    return getTrace(traceId).execute();
   }
 
   @Override public Call<List<String>> getServiceNames() {

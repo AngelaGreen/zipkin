@@ -13,9 +13,12 @@
  */
 package zipkin2.elasticsearch;
 
+import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
 import zipkin2.Call;
 import zipkin2.DependencyLink;
 import zipkin2.Span;
@@ -134,6 +137,27 @@ final class ElasticsearchSpanStore implements SpanStore{
 
     SearchRequest request = SearchRequest.create(asList(allSpanIndices)).term("traceId", traceId);
     return search.newCall(request, BodyConverters.SPANS);
+  }
+
+  @Override
+  public List<Span> getSpans(String traceId) throws IOException {
+    // make sure we have a 16 or 32 character trace ID
+    traceId = Span.normalizeTraceId(traceId);
+
+    // Unless we are strict, truncate the trace ID to 64bit (encoded as 16 characters)
+    if (!strictTraceId && traceId.length() == 32) traceId = traceId.substring(16);
+
+    long endMillis = System.currentTimeMillis();
+    long beginMillis = endMillis - 7 * 24 * 60 * 60 * 1000;
+    List<String> allIndices = indexNameFormatter.formatTypeAndRange(SPAN, beginMillis, endMillis);
+    List<Span> spans = Collections.emptyList();
+    for (int i = allIndices.size()-1; i >= 0; i--) {
+      List<String> indices = Collections.singletonList(allIndices.get(i));
+      SearchRequest request = SearchRequest.create(indices).term("traceId", traceId);
+      spans = search.newCall(request, BodyConverters.SPANS).execute();
+      if (!spans.isEmpty()) break;
+    }
+    return spans;
   }
 
   @Override

@@ -38,7 +38,7 @@ public final class SearchRequest {
    *
    * <p> See https://www.elastic.co/guide/en/elasticsearch/reference/current/search-request-from-size.html
    */
-  static final int MAX_RESULT_WINDOW = 10000; // the default elasticsearch allowed limit
+  static final int MAX_RESULT_WINDOW = 200; // the default elasticsearch allowed limit
 
   transient final List<String> indices;
   @Nullable transient final String type;

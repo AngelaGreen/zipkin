@@ -13,6 +13,7 @@
  */
 package zipkin2.server.internal.brave;
 
+import brave.ScopedSpan;
 import brave.Tracer;
 import brave.Tracing;
 import java.io.IOException;
@@ -71,6 +72,19 @@ public final class TracingStorageComponent extends StorageComponent {
     @Override
     public Call<List<Span>> getTrace(String traceId) {
       return new TracedCall<>(tracer, delegate.getTrace(traceId), "get-trace");
+    }
+
+    @Override
+    public List<Span> getSpans(String traceId) throws IOException {
+      ScopedSpan span = tracer.startScopedSpan("get-spans");
+      try {
+        return delegate.getSpans(traceId);
+      } catch (RuntimeException | IOException | Error e) {
+        span.error(e);
+        throw e;
+      } finally {
+        span.finish();
+      }
     }
 
     @Override

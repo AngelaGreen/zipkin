@@ -17,6 +17,8 @@ import com.datastax.driver.core.KeyspaceMetadata;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.exceptions.DriverException;
 import com.datastax.driver.core.utils.UUIDs;
+
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -24,6 +26,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import zipkin2.Call;
@@ -198,6 +201,11 @@ class CassandraSpanStore implements SpanStore { // not final for testing
     // make sure we have a 16 or 32 character trace ID
     String normalizedTraceId = Span.normalizeTraceId(traceId);
     return spans.newCall(normalizedTraceId);
+  }
+
+  @Override
+  public List<Span> getSpans(String traceId) throws IOException {
+    return getTrace(traceId).execute();
   }
 
   @Override
