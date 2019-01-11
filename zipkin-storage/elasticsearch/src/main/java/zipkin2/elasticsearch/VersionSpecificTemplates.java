@@ -44,7 +44,7 @@ final class VersionSpecificTemplates {
             .replace(
                 "${__TRACE_ID_MAPPING__}",
                 es.strictTraceId()
-                    ? "{ KEYWORD }"
+                    ? "{ KEYWORD, \"eager_global_ordinals\": true }"
                     : "{ \"type\": \"STRING\", \"analyzer\": \"traceId_analyzer\" }");
     this.dependencyIndexTemplate =
         DEPENDENCY_INDEX_TEMPLATE
@@ -114,12 +114,12 @@ final class VersionSpecificTemplates {
               + "        \"localEndpoint\": {\n"
               + "          \"type\": \"object\",\n"
               + "          \"dynamic\": false,\n"
-              + "          \"properties\": { \"serviceName\": { KEYWORD } }\n"
+              + "          \"properties\": { \"serviceName\": { KEYWORD, \"eager_global_ordinals\": true } }\n"
               + "        },\n"
               + "        \"remoteEndpoint\": {\n"
               + "          \"type\": \"object\",\n"
               + "          \"dynamic\": false,\n"
-              + "          \"properties\": { \"serviceName\": { KEYWORD } }\n"
+              + "          \"properties\": { \"serviceName\": { KEYWORD, \"eager_global_ordinals\": true } }\n"
               + "        },\n"
               + "        \"timestamp_millis\": {\n"
               + "          \"type\":   \"date\",\n"
@@ -127,7 +127,7 @@ final class VersionSpecificTemplates {
               + "        },\n"
               + "        \"duration\": { \"type\": \"long\" },\n"
               + "        \"annotations\": { \"enabled\": false },\n"
-              + "        \"tags\": {" // 需要被索引
+              + "        \"tags\": {\n" // 需要被索引
               + "          \"properties\": {\n"
               + "            \"error\":            { \"type\": \"text\" },\n"
               + "            \"http.queryString\": { \"type\": \"text\" },\n"
@@ -136,7 +136,7 @@ final class VersionSpecificTemplates {
               + "            \"dubbo.arguments\":  { \"type\": \"text\" },\n"
               + "            \"dubbo.response\":   { \"type\": \"text\" },\n"
               + "            \"jms.body\":         { \"type\": \"text\" }\n"
-              + "          }"
+              + "          }\n"
               + "        },\n"
               + "        \"_q\": { KEYWORD }\n"
               + "      }\n"
