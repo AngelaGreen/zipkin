@@ -99,10 +99,10 @@ final class ElasticsearchSpanStore implements SpanStore{
         Aggregation.terms("traceId", request.limit());
 
     if ("duration-asc".equals(request.sortOrder())) {
-      traceIdSortOrder.addSubAggregation(Aggregation.min("duration"))
+      traceIdSortOrder.addSubAggregation(Aggregation.max("duration"))
         .orderBy("duration", "asc");
     } else if ("timestamp-desc".equals(request.sortOrder())) {
-      traceIdSortOrder.addSubAggregation(Aggregation.max("timestamp_millis"))
+      traceIdSortOrder.addSubAggregation(Aggregation.min("timestamp_millis"))
         .orderBy("timestamp_millis", "desc");
     } else if ("timestamp-asc".equals(request.sortOrder())) {
       traceIdSortOrder.addSubAggregation(Aggregation.min("timestamp_millis"))
